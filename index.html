@@ -198,7 +198,6 @@
         <div class="row compact">
           <label>Opacity</label>
           <input type="range" id="tileOpacitySlider" min="0" max="100" value="100" oninput="updateTileOpacity()" style="flex:1">
-          <span id="opacityValue" style="min-width:40px;text-align:right">100%</span>
         </div>
       </div>
     </div>
@@ -1126,11 +1125,7 @@ function updateColorRange(){ redrawGrid(); }
 function updateSaturation(){ redrawGrid(); }
 function updateContrast(){ redrawGrid(); }
 function updateBrightness(){ redrawGrid(); }
-function updateTileOpacity(){ 
-  const val = $('#tileOpacitySlider').value;
-  $('#opacityValue').textContent = val + '%';
-  redrawGrid(); 
-}
+function updateTileOpacity(){ redrawGrid(); }
 
 /* wire-up */
 window.onload=()=>{
