@@ -40,6 +40,8 @@
   .segbar input:checked+label{background:#333;color:#fff}
   /* tiny hex badges */
   .hexbadge{font-family:monospace;background:#fff;border:1px solid #bbb;border-radius:6px;padding:4px 6px}
+  /* color text inputs */
+  .color-text{width:80px;padding:4px 8px;border:1px solid #999;border-radius:4px;font-family:monospace;font-size:13px}
 </style>
 </head>
 <body>
@@ -47,7 +49,7 @@
     <div id="sidebar">
       <div class="section">
         <h3>Canvas &amp; Grid</h3>
-        <textarea id="phraseInput" placeholder="Enter your text here..." oninput="currentCells=null" style="margin-bottom:12px"></textarea>
+        <textarea id="phraseInput" placeholder="Enter your text here..." oninput="currentCells=null;generateGrid()" style="margin-bottom:12px"></textarea>
         
         <div class="control-group">
           <h4>Canvas Size</h4>
@@ -72,14 +74,14 @@
             <div class="row compact"><label>Half Tile</label><input type="range" id="densitySlider" min="0" max="100" value="52" oninput="updateDensity()" style="flex:1"></div>
             <div class="row compact"><label>Double Tile</label><input type="range" id="doubleWidthSlider" min="0" max="100" value="81" oninput="updateDoubleWidth()" style="flex:1"></div>
           </div>
-          <div class="row" id="includeSpacesRow"><label>Include Spaces</label><input type="checkbox" id="includeSpaces" onchange="currentCells=null;generateGrid(true);updateSpaceControlsVisibility();"></div>
+          <div class="row" id="includeSpacesRow"><label>Include Spaces</label><input type="checkbox" id="includeSpaces" onchange="currentCells=null;generateGrid();updateSpaceControlsVisibility();"></div>
           <div class="control-group" id="spaceControls" style="display:none">
             <h4>Space Settings</h4>
             <div class="row compact"><label>Custom Space Color</label><input type="checkbox" id="customSpaceColor" onchange="toggleSpaceControls()"></div>
             <div class="row compact" id="spaceColorRow" style="display:none">
               <label>Space Color</label>
               <input type="color" id="spaceColorPicker" class="picker" value="#404040" onchange="syncSpaceColorFromPicker()">
-              <span class="hexbadge" id="spaceHex">#404040</span>
+              <input type="text" id="spaceColorText" class="color-text" value="#404040" oninput="syncSpaceColorFromText()">
             </div>
             
             <div class="control-group" id="specialCharControls">
@@ -106,7 +108,7 @@
         <div class="row">
           <label>Canvas BG</label>
           <input type="color" id="bgColorPicker" class="picker" value="#000000" onchange="syncBgColorFromPicker()">
-          <span class="hexbadge" id="bgHex">#000000</span>
+          <input type="text" id="bgColorText" class="color-text" value="#000000" oninput="syncBgColorFromText()">
         </div>
       </div>
 
@@ -126,7 +128,7 @@
           <div class="row compact">
             <label>Color</label>
             <input type="color" id="firstLetterColorPicker" class="picker" value="#ffffff" onchange="syncFirstFromPicker()">
-            <span class="hexbadge" id="firstHex">#ffffff</span>
+            <input type="text" id="firstLetterColorText" class="color-text" value="#ffffff" oninput="syncFirstFromText()">
           </div>
           <div class="row compact">
             <label>Weight</label>
@@ -139,7 +141,7 @@
           <div class="row compact">
             <label>Color</label>
             <input type="color" id="otherTextColorPicker" class="picker" value="#bfbfbf" onchange="syncOtherFromPicker()">
-            <span class="hexbadge" id="otherHex">#bfbfbf</span>
+            <input type="text" id="otherTextColorText" class="color-text" value="#bfbfbf" oninput="syncOtherFromText()">
           </div>
           <div class="row compact">
             <label>Weight</label>
@@ -170,7 +172,7 @@
             <div class="row compact">
               <label>Tile BG</label>
               <input type="color" id="cellBgColorPicker" class="picker" value="#000000" onchange="syncCellBgFromPicker()">
-              <span class="hexbadge" id="cellBgHex">#000000</span>
+              <input type="text" id="cellBgColorText" class="color-text" value="#000000" oninput="syncCellBgFromText()">
             </div>
           </div>
         </div>
@@ -188,11 +190,15 @@
             <div class="row compact"><label>Contrast</label><input type="range" id="contrastSlider" min="0" max="200" value="50" oninput="updateContrast()" style="flex:1"></div>
             <div class="row compact"><label>Brightness</label><input type="range" id="brightnessSlider" min="0" max="200" value="50" oninput="updateBrightness()" style="flex:1"></div>
           </div>
-          
-
-
-
         </div>
+      </div>
+      
+      <div class="control-group">
+        <h4>Tile Opacity</h4>
+        <div class="row compact">
+          <label>Opacity</label>
+          <input type="range" id="tileOpacitySlider" min="0" max="100" value="100" oninput="updateTileOpacity()" style="flex:1">
+          <span id="opacityValue" style="min-width:40px;text-align:right">100%</span>
         </div>
       </div>
     </div>
@@ -285,7 +291,6 @@ const CHAR_SPECS={
   ",":["41O19000","41T19000"],
   ".":["41O19000"],
   "-":["18S23300"],
-  // ".":["11S13000"],
 };
 function getSpecsForChar(ch){ if(ch===' ') return []; return CHAR_SPECS[(ch||'').toUpperCase()]||["01AA0000"]; }
 
@@ -513,7 +518,7 @@ function getCanvasSize(){
     const r=$('#canvasContainer').getBoundingClientRect();
     return{width:Math.max(1,Math.floor(r.width)),height:Math.max(1,Math.floor(r.height))};
   }
-  return{width:parseInt($('#canvasWidth').value||'1200',10),height:parseInt($('#canvasHeight').value||'800',10)}
+  return{width:parseInt($('#canvasWidth').value||'1200',10),height:parseInt($('#canvasHeight').value||'800',10)};
 }
 function toggleScreenSize(){const on=$('#screenSize').checked;$('#manualSize').classList.toggle('disabled',on);currentCells=null;generateGrid(true);}
 function getGridMargin(){return parseInt($('#marginSlider').value||'0',10)}
@@ -539,17 +544,92 @@ document.addEventListener('fullscreenchange',()=>{
   if($('#screenSize').checked){setTimeout(()=>{currentCells=null;generateGrid(true);},100);}
 });
 
-/* colors + overlay controls + hex badges */
-function setHex(id, val){ const el=$(id); if(el) el.textContent=val.toLowerCase(); }
-function syncBgColorFromPicker(){ const v=$('#bgColorPicker').value; $('#bgColorText').value=v; setHex('#bgHex', v); updateBgColorFromText(); }
-function updateBgColorFromText(){ const v=$('#bgColorPicker').value.trim(); setHex('#bgHex', v); $('#canvasContainer').style.backgroundColor=v; redrawGrid(); }
-function syncFirstFromPicker(){ const v=$('#firstLetterColorPicker').value; $('#firstLetterColorText').value=v; setHex('#firstHex', v); updateFirstLetterColorFromText(); }
-function updateFirstLetterColorFromText(){ setHex('#firstHex', $('#firstLetterColorPicker').value.trim()); redrawGrid(); }
-function syncOtherFromPicker(){ const v=$('#otherTextColorPicker').value; $('#otherTextColorText').value=v; setHex('#otherHex', v); updateOtherTextColorFromText(); }
-function updateOtherTextColorFromText(){ setHex('#otherHex', $('#otherTextColorPicker').value.trim()); redrawGrid(); }
-function syncCellBgFromPicker(){ const v=$('#cellBgColorPicker').value; $('#cellBgColorText').value=v; setHex('#cellBgHex', v); updateCellBgColorFromText(); }
-function updateCellBgColorFromText(){ setHex('#cellBgHex', $('#cellBgColorPicker').value.trim()); redrawGrid(); }
-function syncSpaceColorFromPicker(){ const v=$('#spaceColorPicker').value; setHex('#spaceHex', v); redrawGrid(); }
+/* Color syncing functions - bidirectional between pickers and text inputs */
+function validateHexColor(hex){
+  const match = /^#([0-9A-Fa-f]{6})$/.exec(hex);
+  return match ? hex.toUpperCase() : null;
+}
+
+// Canvas BG Color
+function syncBgColorFromPicker(){ 
+  const v=$('#bgColorPicker').value; 
+  $('#bgColorText').value=v; 
+  updateBgColor();
+}
+function syncBgColorFromText(){ 
+  const v=$('#bgColorText').value.trim();
+  const valid = validateHexColor(v);
+  if(valid){
+    $('#bgColorPicker').value=valid;
+    updateBgColor();
+  }
+}
+function updateBgColor(){
+  const v=$('#bgColorPicker').value.trim();
+  $('#canvasContainer').style.backgroundColor=v;
+  redrawGrid();
+}
+
+// First Letter Color
+function syncFirstFromPicker(){ 
+  const v=$('#firstLetterColorPicker').value; 
+  $('#firstLetterColorText').value=v; 
+  redrawGrid();
+}
+function syncFirstFromText(){ 
+  const v=$('#firstLetterColorText').value.trim();
+  const valid = validateHexColor(v);
+  if(valid){
+    $('#firstLetterColorPicker').value=valid;
+    redrawGrid();
+  }
+}
+
+// Other Text Color
+function syncOtherFromPicker(){ 
+  const v=$('#otherTextColorPicker').value; 
+  $('#otherTextColorText').value=v; 
+  redrawGrid();
+}
+function syncOtherFromText(){ 
+  const v=$('#otherTextColorText').value.trim();
+  const valid = validateHexColor(v);
+  if(valid){
+    $('#otherTextColorPicker').value=valid;
+    redrawGrid();
+  }
+}
+
+// Cell BG Color
+function syncCellBgFromPicker(){ 
+  const v=$('#cellBgColorPicker').value; 
+  $('#cellBgColorText').value=v; 
+  redrawGrid();
+}
+function syncCellBgFromText(){ 
+  const v=$('#cellBgColorText').value.trim();
+  const valid = validateHexColor(v);
+  if(valid){
+    $('#cellBgColorPicker').value=valid;
+    redrawGrid();
+  }
+}
+
+// Space Color
+function syncSpaceColorFromPicker(){ 
+  const v=$('#spaceColorPicker').value; 
+  $('#spaceColorText').value=v; 
+  redrawGrid();
+}
+function syncSpaceColorFromText(){ 
+  const v=$('#spaceColorText').value.trim();
+  const valid = validateHexColor(v);
+  if(valid){
+    $('#spaceColorPicker').value=valid;
+    redrawGrid();
+  }
+}
+
 function onOverlayToggle(){ updateOverlayUIEnabled(); redrawGrid(); }
 function updateOverlayMargin(){ redrawGrid(); }
 function updateThicknessDisplay(){ redrawGrid(); }
@@ -567,7 +647,7 @@ function updateOverlayUIEnabled(){
   const marginWrap=$('#overlayMarginRow');
   marginWrap.classList.toggle('disabled', !overlay);
   const disable=(!overlay);
-  ['#firstLetterColorPicker','#otherTextColorPicker','#firstThickness','#otherThickness'].forEach(sel=>{
+  ['#firstLetterColorPicker','#firstLetterColorText','#otherTextColorPicker','#otherTextColorText','#firstThickness','#otherThickness'].forEach(sel=>{
     const el=$(sel); if(!el) return; disable?el.setAttribute('disabled','disabled'):el.removeAttribute('disabled');
   });
 }
@@ -724,10 +804,14 @@ class Cell{
       bgFill = (cellBg.toLowerCase()!==canvasBg.toLowerCase()) ? cellBg : canvasBg;
     }
     
+    // Get opacity value (0-1)
+    const opacity = parseInt($('#tileOpacitySlider').value || '100', 10) / 100;
+    
     const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
     rect.setAttribute('x',bgX); rect.setAttribute('y',bgY);
     rect.setAttribute('width',bgW); rect.setAttribute('height',bgH);
     rect.setAttribute('fill',bgFill);
+    rect.setAttribute('fill-opacity',String(opacity));
     bgGroup.appendChild(rect);
 
     // overlay text
@@ -1042,6 +1126,11 @@ function updateColorRange(){ redrawGrid(); }
 function updateSaturation(){ redrawGrid(); }
 function updateContrast(){ redrawGrid(); }
 function updateBrightness(){ redrawGrid(); }
+function updateTileOpacity(){ 
+  const val = $('#tileOpacitySlider').value;
+  $('#opacityValue').textContent = val + '%';
+  redrawGrid(); 
+}
 
 /* wire-up */
 window.onload=()=>{
@@ -1080,16 +1169,18 @@ window.onload=()=>{
 
   updateRows(); updateDensity(); updateDoubleWidth(); updatePadding(); updateMargin();
   updateThicknessDisplay(); updateOverlayUIEnabled();
+  
+  // Initialize color values
   $('#bgColorPicker').value='#000000';
+  $('#bgColorText').value='#000000';
   $('#firstLetterColorPicker').value='#ffffff';
+  $('#firstLetterColorText').value='#ffffff';
   $('#otherTextColorPicker').value='#bfbfbf';
+  $('#otherTextColorText').value='#bfbfbf';
   $('#cellBgColorPicker').value='#000000';
+  $('#cellBgColorText').value='#000000';
   $('#spaceColorPicker').value='#404040';
-  setHex('#bgHex', '#000000');
-  setHex('#firstHex', '#ffffff');
-  setHex('#otherHex', '#bfbfbf');
-  setHex('#cellBgHex', '#000000');
-  setHex('#spaceHex', '#404040');
+  $('#spaceColorText').value='#404040';
 
   $('#canvasContainer').style.backgroundColor='#000000';
 
