@@ -284,6 +284,7 @@ const CHAR_SPECS={
   "'":["39O19000","39T19000"],
   ",":["41O19000","41T19000"],
   ".":["41O19000"],
+  "-":["18S23300"],
   // ".":["11S13000"],
 };
 function getSpecsForChar(ch){ if(ch===' ') return []; return CHAR_SPECS[(ch||'').toUpperCase()]||["01AA0000"]; }
