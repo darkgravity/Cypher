@@ -1,0 +1,1106 @@
+function preprocessText(text) {
+  // Only replace spaces with custom character if both Include Spaces and Replace Space are enabled
+  if ($('#includeSpaces').checked && $('#replaceSpaceChar').checked) {
+    const replaceChar = $('#replaceCharText').value || '_';
+    return text.replace(/ /g, replaceChar);
+  }
+  return text;
+}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tessellated Bezier Text Tiles</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;background:#000;height:100vh;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+  #sidebarWrapper{position:absolute;left:0;top:0;height:100vh;width:340px;z-index:10;transition:transform .3s ease}
+  body.sidebar-collapsed #sidebarWrapper{transform:translateX(-340px)}
+  #sidebar{height:100vh;overflow:auto;background:#f0f0f0;border-right:1px solid #ddd;padding:14px}
+  .section{margin-bottom:16px;border-bottom:1px solid #ddd;padding-bottom:12px}
+  .section:last-child{border-bottom:none}
+  .section h3{margin:0 0 8px;font-size:16px}
+  .row{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
+  .row label{min-width:120px;font-weight:bold;font-size:14px}
+  .row.compact{gap:8px;margin:4px 0}
+  .row.compact label{min-width:80px;font-size:13px}
+  .control-group{background:#f8f8f8;border-radius:6px;padding:12px;margin:8px 0}
+  .control-group h4{margin:0 0 8px;font-size:14px;color:#666;font-weight:600}
+  #canvasContainer{position:absolute;left:340px;right:0;top:0;bottom:0;background:#000;overflow:auto;transition:left .3s ease}
+  body.sidebar-collapsed #canvasContainer{left:0}
+  #stage{display:block;width:100%;height:100%}
+  #toggleWrapper{position:fixed;top:10px;left:10px;z-index:20;display:flex;gap:8px}
+  .btn{width:36px;height:36px;border:0;border-radius:6px;background:#333;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
+  #toggleSidebar{font-size:20px}
+  #regen{background:#28a745;font-size:16px}
+  #saveBtn{background:#0069d9;font-size:16px}
+  #copyBtn{background:#17a2b8;font-size:16px}
+  #fullscreenBtn{position:fixed;top:10px;right:10px;z-index:20}
+  textarea{width:100%;height:120px;padding:10px;border:1px solid #999;border-radius:8px;resize:vertical}
+  .picker{width:36px;height:36px;border:1px solid #999;border-radius:6px;padding:0}
+  .disabled{opacity:.5;pointer-events:none}
+  /* segmented button bar */
+  .segbar{display:inline-flex;border:1px solid #bbb;border-radius:8px;overflow:hidden}
+  .segbar input{display:none}
+  .segbar label{padding:6px 12px;background:#e9e9e9;cursor:pointer;font-size:13px;user-select:none}
+  .segbar label+label{border-left:1px solid #bbb}
+  .segbar input:checked+label{background:#333;color:#fff}
+  /* tiny hex badges */
+  .hexbadge{font-family:monospace;background:#fff;border:1px solid #bbb;border-radius:6px;padding:4px 6px}
+</style>
+</head>
+<body>
+  <div id="sidebarWrapper">
+    <div id="sidebar">
+      <div class="section">
+        <h3>Canvas &amp; Grid</h3>
+        <textarea id="phraseInput" placeholder="Enter your text here..." oninput="currentCells=null" style="margin-bottom:12px"></textarea>
+        
+        <div class="control-group">
+          <h4>Canvas Size</h4>
+          <div class="row"><label>Auto-fit</label><input type="checkbox" id="screenSize" checked onchange="toggleScreenSize()" /></div>
+          <div id="manualSize" class="disabled">
+            <div class="row compact"><label>Width</label><input type="number" id="canvasWidth" value="1200" min="200" style="width:80px" /></div>
+            <div class="row compact"><label>Height</label><input type="number" id="canvasHeight" value="800" min="200" style="width:80px" /></div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h4>Grid Layout</h4>
+          <div class="row"><label>Rows</label><input type="range" id="rowSlider" min="1" max="50" value="15" oninput="updateRows()" style="flex:1"></div>
+          <div class="row">
+            <label>Type</label>
+            <div class="segbar" id="gridTypeBar">
+              <input type="radio" id="gridTess" name="gridType" value="tessellated" checked><label for="gridTess">Tessellated</label>
+              <input type="radio" id="gridBasic" name="gridType" value="basic"><label for="gridBasic">Basic</label>
+            </div>
+          </div>
+          <div id="tessControls">
+            <div class="row compact"><label>Half Tile</label><input type="range" id="densitySlider" min="0" max="100" value="52" oninput="updateDensity()" style="flex:1"></div>
+            <div class="row compact"><label>Double Tile</label><input type="range" id="doubleWidthSlider" min="0" max="100" value="81" oninput="updateDoubleWidth()" style="flex:1"></div>
+          </div>
+          <div class="row" id="includeSpacesRow"><label>Include Spaces</label><input type="checkbox" id="includeSpaces" onchange="currentCells=null;generateGrid(true);updateSpaceControlsVisibility();"></div>
+          <div class="control-group" id="spaceControls" style="display:none">
+            <h4>Space Settings</h4>
+            <div class="row compact"><label>Custom Space Color</label><input type="checkbox" id="customSpaceColor" onchange="toggleSpaceControls()"></div>
+            <div class="row compact" id="spaceColorRow" style="display:none">
+              <label>Space Color</label>
+              <input type="color" id="spaceColorPicker" class="picker" value="#404040" onchange="syncSpaceColorFromPicker()">
+              <span class="hexbadge" id="spaceHex">#404040</span>
+            </div>
+            
+            <div class="control-group" id="specialCharControls">
+              <h4>Special Characters</h4>
+              <div class="row compact">
+                <label>Replace Space</label>
+                <input type="checkbox" id="replaceSpaceChar" onchange="redrawGrid()">
+              </div>
+              <div class="row compact" id="replaceCharRow">
+                <label>With Character</label>
+                <input type="text" id="replaceCharText" value="_" maxlength="1" onchange="redrawGrid()" style="width:40px">
+              </div>
+            </div>
+          </div>
+        
+        </div>
+
+        <div class="control-group">
+          <h4>Spacing</h4>
+          <div class="row compact"><label>Cell Padding</label><input type="range" id="paddingSlider" min="0" max="10" value="4" oninput="updatePadding()" style="flex:1"></div>
+          <div class="row compact"><label>Canvas Margin</label><input type="range" id="marginSlider" min="0" max="200" value="20" oninput="updateMargin()" style="flex:1"></div>
+        </div>
+
+        <div class="row">
+          <label>Canvas BG</label>
+          <input type="color" id="bgColorPicker" class="picker" value="#000000" onchange="syncBgColorFromPicker()">
+          <span class="hexbadge" id="bgHex">#000000</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Text Appearance</h3>
+        <div class="row">
+          <label>Overlay Text</label>
+          <input type="checkbox" id="overlayText" checked onchange="onOverlayToggle()">
+        </div>
+        <div class="row" id="overlayMarginRow">
+          <label>Text Margin</label>
+          <input type="range" id="overlayMarginSlider" min="0" max="30" value="10" oninput="updateOverlayMargin()" style="flex:1">
+        </div>
+        
+        <div class="control-group">
+          <h4>Initial Character</h4>
+          <div class="row compact">
+            <label>Color</label>
+            <input type="color" id="firstLetterColorPicker" class="picker" value="#ffffff" onchange="syncFirstFromPicker()">
+            <span class="hexbadge" id="firstHex">#ffffff</span>
+          </div>
+          <div class="row compact">
+            <label>Weight</label>
+            <input type="range" id="firstThickness" min="1" max="20" value="2" oninput="updateThicknessDisplay()" style="flex:1">
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h4>Other Characters</h4>
+          <div class="row compact">
+            <label>Color</label>
+            <input type="color" id="otherTextColorPicker" class="picker" value="#bfbfbf" onchange="syncOtherFromPicker()">
+            <span class="hexbadge" id="otherHex">#bfbfbf</span>
+          </div>
+          <div class="row compact">
+            <label>Weight</label>
+            <input type="range" id="otherThickness" min="1" max="20" value="2" oninput="updateThicknessDisplay()" style="flex:1">
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Color System</h3>
+        <div class="control-group">
+          <h4>Mode</h4>
+          <div class="row">
+            <div class="segbar" id="bgModeBar" style="margin-right:12px">
+              <input type="radio" id="bgModeColor" name="bgMode" value="color" checked><label for="bgModeColor">Color</label>
+              <input type="radio" id="bgModeSingle" name="bgMode" value="single"><label for="bgModeSingle">Single</label>
+            </div>
+            <div class="segbar" id="applyColorBar">
+              <input type="radio" id="applyBg" name="applyColor" value="background" checked><label for="applyBg">Background</label>
+              <input type="radio" id="applyText" name="applyColor" value="text"><label for="applyText">Text</label>
+            </div>
+          </div>
+        </div>
+
+        <div id="singleControls" style="display:none">
+          <div class="control-group">
+            <h4>Single Color</h4>
+            <div class="row compact">
+              <label>Tile BG</label>
+              <input type="color" id="cellBgColorPicker" class="picker" value="#000000" onchange="syncCellBgFromPicker()">
+              <span class="hexbadge" id="cellBgHex">#000000</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="colorControls">
+          <div class="control-group">
+            <h4>Hue Range</h4>
+            <div class="row compact"><label>Center</label><input type="range" id="hueCenter" min="0" max="100" value="0" oninput="updateColorRange()" style="flex:1"></div>
+            <div class="row compact"><label>Radius</label><input type="range" id="hueRadius" min="0" max="50" value="30" oninput="updateColorRange()" style="flex:1"></div>
+          </div>
+          
+          <div class="control-group">
+            <h4>Color Properties</h4>
+            <div class="row compact"><label>Saturation</label><input type="range" id="saturationSlider" min="0" max="200" value="70" oninput="updateSaturation()" style="flex:1"></div>
+            <div class="row compact"><label>Contrast</label><input type="range" id="contrastSlider" min="0" max="200" value="50" oninput="updateContrast()" style="flex:1"></div>
+            <div class="row compact"><label>Brightness</label><input type="range" id="brightnessSlider" min="0" max="200" value="50" oninput="updateBrightness()" style="flex:1"></div>
+          </div>
+          
+
+
+
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="canvasContainer">
+    <svg id="stage" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div id="toggleWrapper">
+    <button id="toggleSidebar" class="btn" title="Toggle sidebar" onclick="toggleSidebar()">×</button>
+    <button id="regen" class="btn" title="Regenerate" onclick="regenerate()">▶</button>
+    <button id="saveBtn" class="btn" title="Save SVG" onclick="saveSVG()">💾</button>
+    <button id="copyBtn" class="btn" title="Copy SVG to Clipboard" onclick="copySVG()">📋</button>
+  </div>
+  <button id="fullscreenBtn" class="btn" title="Toggle Fullscreen" onclick="toggleFullscreen()">⛶</button>
+
+<script>
+/* ==== randomness ==== */
+let runNonce=Math.random();
+function rand(){return Math.abs(Math.sin(runNonce+=0.1337))%1;}
+function shuffled(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function rotate(arr,k){const n=arr.length; if(!n) return arr.slice(); k=((k%n)+n)%n; return arr.slice(k).concat(arr.slice(0,k));}
+
+/* ===== PATH DATA ===== */
+const AA=[[[50,0],[30.47378,39.05244],[19.52622,60.94756],[0,100]],[[50,0],[69.52622,39.05244],[80.47378,60.94756],[100,100]],[[15,70],[42.33671,70],[57.66329,70],[85,70]]];
+const A1=[[[0,100],[0,44.77153],[44.77153,0],[100,0]]];
+const T2=[[0,100],[0,98.55142],[0,97.60583],[0,95.86223],[0,86.02135],[2.2035,78.6779],[13.60175,71.83895],[25,65],[77.7965,33.8221],[86.39825,28.16105],[95,22.5],[100,13.97865],[100,4.13777],[100,2.45969],[100,1.47426],[100,0]];
+const T5=[[100,100],[100,94.17794],[100,83.96495],[100,77.87644],[100,62.94977],[73.78861,44.7559],[47.50002,44.90245],[30,45],[8.07535,44.88432],[0,52.5],[0,33.00773],[0,10],[0,0],[17.36688,0],[82.5,0],[100,0]];
+const A2=[[100,100],[100,44.77153],[55.22847,0],[0,0]];
+const A3=[[100,0],[100,55.22847],[55.22847,100],[0,100]];
+const A4=[[0,0],[0,55.22847],[44.77153,100],[100,100]];
+const S1=[[50,0],[50,33.33333],[50,66.66666],[50,100]];
+const S2=[[100,50],[66.66666,50],[33.33333,50],[0,50]];
+const S3=[[100,0],[66.66666,33.33333],[33.33333,66.66666],[0,100]];
+const S4=[[0,0],[33.33333,33.33333],[66.66666,66.66666],[100,100]];
+const B1=[[0,100],[0,95.42512],[0,93.96583],[0,88.28529],[0,82.60475],[2.27822,77.16151],[6.32448,73.1745],[10.37075,69.18749],[70.4236,10.01409],[74.39262,6.10319],[78.36164,2.1923],[83.71002,0],[89.28212,0],[94.85421,0],[95.8144,0],[100,0]];
+const B2=[[100,100],[100,95.42512],[100,93.96583],[100,88.28529],[100,82.60475],[97.72178,77.16151],[93.67552,73.1745],[89.62925,69.18749],[29.5764,10.01409],[25.60738,6.10319],[21.63836,2.1923],[16.28998,0],[10.71788,0],[5.14579,0],[4.1856,0],[0,0]];
+const B3=[[100,0],[100,4.57488],[100,6.03417],[100,11.71471],[100,17.39525],[97.72178,22.83849],[93.67552,26.8255],[89.62925,30.81251],[29.5764,89.98591],[25.60738,93.89681],[21.63836,97.8077],[16.28998,100],[10.71788,100],[5.14579,100],[4.1856,100],[0,100]];
+const B4=[[0,0],[0,4.57488],[0,6.03417],[0,11.71471],[2.27822,22.83849],[6.32448,26.8255],[10.37075,30.81251],[70.4236,89.98591],[74.39262,93.89681],[78.36164,97.8077],[83.71002,100],[89.28212,100],[94.85421,100],[95.8144,100],[100,100]];
+const C1=[[0,66.7],[12.5,35],[51.80916,0],[100,0]];
+const C2=[[100,66.7],[87.5,35],[48.19084,0],[0,0]];
+const C3=[[100,33.3],[87.5,65],[48.19084,100],[0,100]];
+const C4=[[0,33.3],[12.50001,65],[51.80916,100],[100,100]];
+const V1=[[0,0],[16.66667,33.33333],[33.33333,66.66667],[50,100],[66.66667,66.66667],[83.33333,33.33333],[100,0]];
+const raw_data={AA,A1,A2,A3,A4,S1,S2,S3,S4,B1,B2,B3,B4,C1,C2,C3,C4,V1,T2,T5};
+
+const CHAR_SPECS={
+  A:["0100AA"],
+  B:["0600S1","1502S2","0320A2","1322S1","3320A3","1802S2","3420A2","1422S1","0420A3","2102S2"],
+  C:["0220A1","1522S2","0320C2","0420C3","2122S2","0520A4","0622S1"],
+  D:["0600S1","1502S2","0320A2","1222S1","0420A3","2122S2","2102S2"],
+  E:["0600S1","1500S2","1800S2","2100S2"],
+  F:["0600S1","1500S2","1800S2"],
+  G:["0220A1","1522S2","0320C2","0420A3","2122S2","0520A4","0622S1","1400S1","2960S2"],
+  H:["0600S1","1800S2","1200S1"],
+  I:["1500S2","0900S1","2100S2"],
+  J:["1202S1","0420A3","2122S2","0520A4"],
+  K:["0600S1","3322B3","3422B2","1302S1","1420S1","1802S2"],
+  L:["0600S1","2100S2"],
+  M:["0600S1","1200S1","2800S4","2900S3"],
+  N:["0600S1","1200S1","0111S4"],
+  O:["0220A1","1522S2","0320A2","1222S1","0420A3","2122S2","0520A4","0622S1"],
+  P:["0600S1","1502S2","0320A2","1322S1","3320A3","1802S2"],
+  Q:["0220A1","1522S2","0320A2","1222S1","0420A3","2122S2","0520A4","0622S1","0420S4"],
+  R:["0600S1","1502S2","0320A2","1322S1","3320A3","1802S2","1420S1","3420B2"],
+  S:["0222A1","1522S2","0320A2","1322S1","0722S1","0822S1","3820A4","1822S2","3420A2","1422S1","0420A3","2122S2","0520A4"],
+  T:["1500S2","0900S1"],
+  U:["1202S1","0420A3","2122S2","0520A4","0602S1"],
+  V:["2800S4","2900S3"],
+  W:["2800V1","2900V1"],
+  X:["0100S4","0100S3"],
+  Y:["2500V1","2600S1"],
+  Z:["1500S2","2100S2","0100S3"],
+  "0":["0220A1","1522S2","0320A2","1222S1","0420A3","2122S2","0520A4","0622S1"],
+  "1":["0900S1","1640S2","2100S2"],
+  "2":["0222A1","0320A2","2420T2","2100S2","1522S2"],
+  "3":["0222A1","1522S2","0320A2","1322S1","0722S1","0822S1","3320A3","1822S2","3420A2","1422S1","0420A3","2122S2","0520A4"],
+  "4":["1200S1","1800S2","2800S3"],
+  "5":["1500S2","0700S1","1802S2","3420A2","1422S1","0420A3","2122S2","0520A4"],
+  "6":["0222A1","1522S2","0320A2","0622S1","0722S1","0822S1","3720A1","1822S2","3420A2","1422S1","0420A3","2122S2","0520A4"],
+  "7":["1500S2","2720S3"],
+  "8":["0222A1","1522S2","0320A2","1322S1","0722S1","0822S1","3820A4","3320A3","1822S2","3420A2","1422S1","0420A3","2122S2","0520A4","3720A1"],
+  "9":["0222A1","1522S2","0320A2","1222S1","0722S1","0822S1","3820A4","1822S2","3320A3","1422S1","0420A3","2122S2","0520A4"],
+  "_":["2100S2"],
+  "'":["1003S1"],
+  ",":["1130S1"],
+};
+function getSpecsForChar(ch){ if(ch===' ') return []; return CHAR_SPECS[(ch||'').toUpperCase()]||["0100AA"]; }
+
+/* helpers */
+function toPaths(v){
+  if(!v) return [];
+  if(Array.isArray(v)&&Array.isArray(v[0])&&typeof v[0][0]==='number'){return [v.map(([x,y])=>[+x,+y])];}
+  if(Array.isArray(v)&&Array.isArray(v[0])){return v.map(p=>p.map(([x,y])=>[+x,+y]));}
+  return [];
+}
+function getPaths(key){
+  if(!raw_data[key]) throw new Error("Unknown control array: "+key);
+  return toPaths(raw_data[key]);
+}
+function remapVals(arr,omin,omax,nmin,nmax){
+  const span=omax-omin;
+  if(span===0){const c=nmin+(nmax-nmin)*.5;return arr.map(()=>c);}
+  return arr.map(v=>nmin+(v-omin)*(nmax-nmin)/span);
+}
+function cubicSegments(controlPts){
+  const n = controlPts.length;
+  if (n < 4) return [];
+  const segs = (n - 1) / 3;
+  if (Math.abs(segs - Math.round(segs)) > 1e-9){
+    return [{ d: controlPts.reduce((acc,[x,y],i)=>acc+(i?` L ${x} ${y}`:`M ${x} ${y}`), "") }];
+  }
+  const out=[];
+  for (let s=0; s<segs; s++){
+    const i = 3*s;
+    const p0=controlPts[i], p1=controlPts[i+1], p2=controlPts[i+2], p3=controlPts[i+3];
+    out.push({ d:`M ${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]}, ${p2[0]} ${p2[1]}, ${p3[0]} ${p3[1]}` });
+  }
+  return out;
+}
+
+/* ---------- tiling (LL/UR human model) ---------- */
+const NARROW_SET = new Set(["B","P","S","0","5","2","R","9","8"]);
+function toLLUR(minX, minY, maxX, maxY){
+  const left = Math.min(minX, maxX);
+  const right = Math.max(minX, maxX);
+  const top = Math.min(minY, maxY);
+  const bottom = Math.max(minY, maxY);
+  return [[left, bottom],[right, top]];
+}
+
+/* cell tiling */
+function tileBoxPython(tileType, d1, d2, BBMin, BBMax, ch){
+  const origWidth  = BBMax.x - BBMin.x;
+  const origHeight = BBMax.y - BBMin.y;
+  const width3   = NARROW_SET.has((ch||"").toUpperCase()) ? (origHeight * 0.5) : (origHeight * 2);
+  const tileWidth = Math.min(origWidth, origHeight, width3);
+  const tileD1 = d1 ? (tileWidth / d1) : 0;
+  const tileD2 = d2 ? (tileWidth / d2) : 0;
+  const midX = BBMin.x + origWidth  * 0.5;
+  const midY = BBMin.y + origHeight * 0.5;
+  const tileHeight = origHeight;
+
+  switch(tileType){
+    case'01':return toLLUR(BBMin.x,BBMin.y,BBMax.x,BBMax.y);
+    case'02':return toLLUR(BBMin.x,BBMin.y,BBMin.x+tileD1,BBMin.y+tileD1);
+    case'03':return toLLUR(BBMax.x-tileD1,BBMin.y,BBMax.x,BBMin.y+tileD1);
+    case'04':return toLLUR(BBMax.x-tileD1,BBMax.y-tileD1,BBMax.x,BBMax.y);
+    case'05':return toLLUR(BBMin.x,BBMax.y-tileD1,BBMin.x+tileD1,BBMax.y);
+    case'06':return toLLUR(BBMin.x,BBMin.y+tileD1,BBMin.x,BBMax.y-tileD2);
+    case'07':return toLLUR(BBMin.x,BBMin.y+tileD1,BBMin.x,BBMin.y+(tileHeight*0.5)-tileD2);
+    case'08':return toLLUR(BBMin.x,BBMin.y+(tileHeight*0.5)+tileD1,BBMin.x,BBMin.y+tileHeight - tileD2);
+    case'09':return toLLUR(midX,BBMax.y-tileD2,midX,BBMin.y+tileD1);
+    case'10':return toLLUR(midX,BBMin.y+tileD1,midX,BBMin.y+(tileHeight*0.5)-tileD2);
+    case'11':return toLLUR(midX,BBMin.y+(tileHeight*0.5)+tileD1,midX,BBMin.y+tileHeight - tileD2);
+    case'12':return toLLUR(BBMax.x,BBMax.y-tileD2,BBMax.x,BBMin.y+tileD1);
+    case'13':return toLLUR(BBMax.x,BBMin.y+tileD1,BBMax.x,BBMin.y+(tileHeight*0.5)-tileD2);
+    case'14':return toLLUR(BBMax.x,BBMin.y+(tileHeight*0.5)+tileD1,BBMax.x,BBMax.y - tileD2);
+    case'15':return toLLUR(BBMin.x+tileD1,BBMin.y,BBMax.x-tileD2,BBMin.y);
+    case'16':return toLLUR(BBMin.x+tileD1,BBMin.y,midX -tileD2,BBMin.y);
+    case'17':return toLLUR(midX +tileD1,BBMin.y,BBMax.x-tileD2,BBMin.y);
+    case'18':return toLLUR(BBMin.x+tileD1,midY,BBMax.x-tileD2,midY);
+    case'19':return toLLUR(BBMin.x+tileD1,midY,midX -tileD2,midY);
+    case'20':return toLLUR(midX +tileD1,midY,BBMax.x-tileD2,midY);
+    case'21':return toLLUR(BBMin.x+tileD1,BBMax.y,BBMax.x-tileD2,BBMax.y);
+    case'22':return toLLUR(BBMin.x+tileD1,BBMax.y,midX -tileD2,BBMax.y);
+    case'23':return toLLUR(midX +tileD1,BBMax.y,BBMax.x-tileD2,BBMax.y);
+    case'24':return toLLUR(BBMin.x,BBMin.y+tileD1,BBMax.x,BBMax.y-tileD2);
+    case'25':return toLLUR(BBMin.x,BBMin.y+tileD1,BBMax.x,BBMin.y+(tileHeight*0.5)-tileD2);
+    case'26':return toLLUR(BBMin.x,BBMin.y+(tileHeight*0.5)+tileD1,BBMax.x,BBMin.y+tileHeight - tileD2);
+    case'27':return toLLUR(BBMin.x+tileD1,BBMin.y,BBMax.x-tileD2,BBMax.y);
+    case'28':return toLLUR(BBMin.x+tileD1,BBMin.y,midX -tileD2,BBMax.y);
+    case'29':return toLLUR(midX +tileD1,BBMin.y,BBMax.x-tileD2,BBMax.y);
+    case'30':return toLLUR(BBMin.x+tileD1,BBMin.y+tileD1,BBMax.x-tileD2,BBMax.y-tileD2);
+    case'31':return toLLUR(midX -tileD1,BBMin.y,midX,BBMin.y+tileD1);
+    case'32':return toLLUR(midX,BBMin.y,midX +tileD1,BBMin.y+tileD1);
+    case'33':return toLLUR(BBMax.x-tileD1,midY -tileD1,BBMax.x,midY);
+    case'34':return toLLUR(BBMax.x-tileD1,midY,BBMax.x,midY +tileD1);
+    case'35':return toLLUR(midX,BBMax.y -tileD1,midX +tileD1,BBMax.y);
+    case'36':return toLLUR(midX -tileD1,BBMax.y -tileD1,midX,BBMax.y);
+    case'37':return toLLUR(BBMin.x,midY,BBMin.x +tileD1,midY +tileD1);
+    case'38':return toLLUR(BBMin.x,midY -tileD1,BBMin.x +tileD1,midY);
+    case'39':return toLLUR(midX -(tileD1*0.5),BBMin.y,midX +(tileD1*0.5),BBMin.y +tileD1);
+    default: return toLLUR(BBMin.x,BBMin.y,BBMax.x,BBMax.y);
+  }
+}
+
+/* draw using LL/UR */
+function drawBezierTileSVG(svg, pMin, pMax, arrayKey, strokeWidth, strokeColor="#e6eef4"){
+  const minX = pMin[0], minY = pMin[1];
+  const maxX = pMax[0], maxY = pMax[1];
+
+  const w = Math.abs(maxX - minX);
+  const h = Math.abs(maxY - minY);
+  const x = Math.min(minX,maxX);
+  const y = Math.min(minY,maxY);
+
+  const paths = getPaths(arrayKey);
+  for (const pathArr of paths){
+    const xs=pathArr.map(p=>p[0]), ys=pathArr.map(p=>p[1]);
+    const mx=remapVals(xs,0,100,x,x+w), my=remapVals(ys,0,100,y,y+h);
+    const ctrl = mx.map((vx,i)=>[vx,my[i]]);
+    const segs = cubicSegments(ctrl);
+    for (const { d } of segs){
+      const el=document.createElementNS("http://www.w3.org/2000/svg","path");
+      el.setAttribute("d", d);
+      el.setAttribute("fill", "none");
+      el.setAttribute("stroke", strokeColor);
+      el.setAttribute("stroke-width", String(strokeWidth));
+      el.setAttribute("stroke-linecap", "round");
+      el.setAttribute("stroke-linejoin", "round");
+      el.setAttribute("vector-effect","non-scaling-stroke");
+      svg.appendChild(el);
+    }
+  }
+}
+
+/* short-hands */
+function $(s){return document.querySelector(s);}
+let currentGridConfig=null;
+let currentCells=null;
+
+function preprocessText(text) {
+  // Only replace spaces with custom character if both Include Spaces and Replace Space are enabled
+  if ($('#includeSpaces').checked && $('#replaceSpaceChar').checked) {
+    const replaceChar = $('#replaceCharText').value || '_';
+    return text.replace(/ /g, replaceChar);
+  }
+  return text;
+}
+
+function strokeWidthPx(isFirst){
+  const v=isFirst?parseInt($('#firstThickness').value||'2',10):parseInt($('#otherThickness').value||'2',10);
+  return Math.max(1,v);
+}
+
+function currentApplyColorTo(){
+  const el=document.querySelector('input[name="applyColor"]:checked');
+  return el?el.value:'background';
+}
+
+function drawBezierChar(parent,x,y,w,h,ch,isFirst,colorOverride=null){
+  if(ch===' ') return;
+  const strokeColor = colorOverride || (isFirst ? $('#firstLetterColorPicker').value.trim() : $('#otherTextColorPicker').value.trim());
+  const specs = getSpecsForChar(ch);
+  if(!specs.length) return;
+
+  const BBMin={x:x,y:y,z:0};
+  const BBMax={x:x+w,y:y+h,z:0};
+  const strokeWidth = strokeWidthPx(isFirst);
+
+  for(const specRaw of specs){
+    const tileType = specRaw.slice(0,2);
+    const d1 = parseInt(specRaw[2],10)||0;
+    const d2 = parseInt(specRaw[3],10)||0;
+    const arrayKey = specRaw.slice(4,6).trim();
+    const [pMin, pMax] = tileBoxPython(tileType,d1,d2,BBMin,BBMax,ch);
+    if (pMin[0]===pMax[0] && pMin[1]===pMax[1]) continue;
+    drawBezierTileSVG(parent, pMin, pMax, arrayKey, strokeWidth, strokeColor);
+  }
+}
+
+/* ---------- color helpers ---------- */
+function hslToRgbString(h,s,l){
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h * 12) % 12;
+    const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+    return Math.round(c * 255);
+  };
+  return `rgb(${f(0)}, ${f(8)}, ${f(4)})`;
+}
+function tileBgColor(char){
+  const hueCenter=(parseInt($('#hueCenter').value,10)||0)/100;
+  const hueRadius=(parseInt($('#hueRadius').value,10)||0)/100;
+  const satPct=Math.max(0,Math.min(200,parseInt($('#saturationSlider').value,10)||70));
+  const brightPct=Math.max(0,Math.min(200,parseInt($('#brightnessSlider').value,10)||100));
+  const contrastPct=Math.max(0,Math.min(200,parseInt($('#contrastSlider').value,10)||50));
+  const letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ', numbers='0123456789', punct=' .,!?\'"/-:;()[]{}@#$%&*+=<>~`|\\_';
+  let t=.5;
+  if(letters.includes(char)) t=letters.indexOf(char)/Math.max(1,letters.length-1);
+  else if(numbers.includes(char)) t=numbers.indexOf(char)/Math.max(1,numbers.length-1);
+  else if(punct.includes(char)) t=punct.indexOf(char)/Math.max(1,punct.length-1);
+  else if(char===' '){
+    // For spaces: use custom color if specified, otherwise default space color
+    if($('#customSpaceColor').checked) return $('#spaceColorPicker').value.trim();
+    t=0.0; // default space gets first position color
+  }
+  let h=(hueCenter-hueRadius)+(2*hueRadius)*t; while(h<0) h+=1; while(h>1) h-=1;
+  const s=Math.min(1, satPct/100);
+  const baseL = 0.5 * (brightPct/100);
+  const spread = (contrastPct/100) * 0.4;
+  const l = Math.max(0, Math.min(1, baseL + (t-0.5)*2*spread));
+  return hslToRgbString(h, s, l);
+}
+
+/* UI bits */
+function toggleSidebar(){
+  const b=$('#toggleSidebar');
+  document.body.classList.toggle('sidebar-collapsed');
+  b.textContent=document.body.classList.contains('sidebar-collapsed')?'→':'×';
+  setTimeout(()=>{currentCells=null;generateGrid(true);},300);
+}
+function getCanvasSize(){
+  if($('#screenSize').checked){
+    const r=$('#canvasContainer').getBoundingClientRect();
+    return{width:Math.max(1,Math.floor(r.width)),height:Math.max(1,Math.floor(r.height))};
+  }
+  return{width:parseInt($('#canvasWidth').value||'1200',10),height:parseInt($('#canvasHeight').value||'800',10)}
+}
+function toggleScreenSize(){const on=$('#screenSize').checked;$('#manualSize').classList.toggle('disabled',on);currentCells=null;generateGrid(true);}
+function getGridMargin(){return parseInt($('#marginSlider').value||'0',10)}
+function getCellPadding(){return parseInt($('#paddingSlider').value||'0',10)}
+function updateRows(){ currentCells=null; generateGrid(true); }
+function updateDensity(){ currentCells=null; generateGrid(true); }
+function updateDoubleWidth(){ currentCells=null; generateGrid(true); }
+function updatePadding(){ redrawGrid(); }
+function updateMargin(){ currentCells=null; generateGrid(true); }
+
+/* fullscreen */
+function toggleFullscreen(){
+  const btn=$('#fullscreenBtn');
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().then(()=>{btn.textContent='⛶';btn.title='Exit Fullscreen';});
+  }else{
+    document.exitFullscreen().then(()=>{btn.textContent='⛶';btn.title='Toggle Fullscreen';});
+  }
+}
+document.addEventListener('fullscreenchange',()=>{
+  const btn=$('#fullscreenBtn');
+  btn.textContent='⛶';btn.title=document.fullscreenElement?'Exit Fullscreen':'Toggle Fullscreen';
+  if($('#screenSize').checked){setTimeout(()=>{currentCells=null;generateGrid(true);},100);}
+});
+
+/* colors + overlay controls + hex badges */
+function setHex(id, val){ const el=$(id); if(el) el.textContent=val.toLowerCase(); }
+function syncBgColorFromPicker(){ const v=$('#bgColorPicker').value; $('#bgColorText').value=v; setHex('#bgHex', v); updateBgColorFromText(); }
+function updateBgColorFromText(){ const v=$('#bgColorPicker').value.trim(); setHex('#bgHex', v); $('#canvasContainer').style.backgroundColor=v; redrawGrid(); }
+function syncFirstFromPicker(){ const v=$('#firstLetterColorPicker').value; $('#firstLetterColorText').value=v; setHex('#firstHex', v); updateFirstLetterColorFromText(); }
+function updateFirstLetterColorFromText(){ setHex('#firstHex', $('#firstLetterColorPicker').value.trim()); redrawGrid(); }
+function syncOtherFromPicker(){ const v=$('#otherTextColorPicker').value; $('#otherTextColorText').value=v; setHex('#otherHex', v); updateOtherTextColorFromText(); }
+function updateOtherTextColorFromText(){ setHex('#otherHex', $('#otherTextColorPicker').value.trim()); redrawGrid(); }
+function syncCellBgFromPicker(){ const v=$('#cellBgColorPicker').value; $('#cellBgColorText').value=v; setHex('#cellBgHex', v); updateCellBgColorFromText(); }
+function updateCellBgColorFromText(){ setHex('#cellBgHex', $('#cellBgColorPicker').value.trim()); redrawGrid(); }
+function syncSpaceColorFromPicker(){ const v=$('#spaceColorPicker').value; setHex('#spaceHex', v); redrawGrid(); }
+function onOverlayToggle(){ updateOverlayUIEnabled(); redrawGrid(); }
+function updateOverlayMargin(){ redrawGrid(); }
+function updateThicknessDisplay(){ redrawGrid(); }
+
+function currentBgMode(){
+  const el=document.querySelector('input[name="bgMode"]:checked');
+  return el?el.value:'color';
+}
+function currentGridType(){
+  const el=document.querySelector('input[name="gridType"]:checked');
+  return el?el.value:'tessellated';
+}
+function updateOverlayUIEnabled(){
+  const overlay=$('#overlayText').checked;
+  const marginWrap=$('#overlayMarginRow');
+  marginWrap.classList.toggle('disabled', !overlay);
+  const disable=(!overlay);
+  ['#firstLetterColorPicker','#otherTextColorPicker','#firstThickness','#otherThickness'].forEach(sel=>{
+    const el=$(sel); if(!el) return; disable?el.setAttribute('disabled','disabled'):el.removeAttribute('disabled');
+  });
+}
+function toggleSpaceControls(){
+  const showSpaceColor=$('#customSpaceColor').checked;
+  $('#spaceColorRow').style.display=showSpaceColor?'flex':'none';
+  redrawGrid();
+}
+
+function updateReplaceCharVisibility(){
+  const show=$('#replaceSpaceChar').checked;
+  $('#replaceCharRow').style.display=show?'flex':'none';
+}
+
+function updateSpaceControlsVisibility(){
+  const includeSpaces=$('#includeSpaces').checked;
+  $('#spaceControls').style.display=includeSpaces?'block':'none';
+}
+
+/* ==== Tessellated planner (unchanged) ==== */
+function largestRemainderQuotas(total,weights){
+  const sum=weights.reduce((a,b)=>a+b,0)||1;
+  const raw=weights.map(w=>(w/sum)*total);
+  const base=raw.map(Math.floor);
+  let rem=total-base.reduce((a,b)=>a+b,0);
+  const order=raw.map((v,i)=>({i,frac:v-base[i]})).sort((a,b)=>b.frac-a.frac);
+  for(let k=0;k<order.length&&rem>0;k++,rem--) base[order[k].i]++;
+  return base;
+}
+function planGrid(charData, rows, startCols=null){
+  const N=charData.length;
+  const safeIDs=[], unsafeIDs=[];
+  charData.forEach((c,i)=>c.isFirstChar?safeIDs.push(i):unsafeIDs.push(i));
+  const pairs=[]; for(let i=0;i<unsafeIDs.length-1;i++){const a=unsafeIDs[i], b=unsafeIDs[i+1]; if(b===a+1 && charData[a].wordIndex===charData[b].wordIndex) pairs.push(a);}
+  const availDoubles=safeIDs.length, availDivides=pairs.length;
+  const doublePct=parseInt($('#doubleWidthSlider').value)/100, halfPct=parseInt($('#densitySlider').value)/100;
+  const D_desired=Math.round(availDoubles*doublePct), V_desired=Math.round(availDivides*halfPct);
+
+  const hintCols=startCols ?? Math.max(1, Math.round((N + D_desired - V_desired)/rows));
+  let best=null;
+  function feasible(cols){
+    const total=rows*cols, delta=total-N;
+    if (delta>=0){ if (delta<=availDoubles) return {cols,D:delta,V:0,total}; }
+    else { const need=-delta; if (need<=availDivides) return {cols,D:0,V:need,total}; }
+    return null;
+  }
+  for(let radius=0; radius<=rows*6; radius++){
+    const candidates=[hintCols-radius, hintCols+radius].filter(c=>c>=1);
+    for(const c of candidates){
+      const p=feasible(c); if(!p) continue;
+      const jitter = rand()*0.1;
+      const score=Math.abs(p.D-D_desired)+Math.abs(p.V-V_desired)+(c*0.001)+jitter;
+      if(!best || score<best.score) best={...p,score};
+    }
+    if(best) break;
+  }
+  if(!best){ let c=Math.max(1,hintCols); let tries=0; while(!best && tries<200){const p=feasible(c); if(p) best={...p,score:1e6}; c++; tries++;} }
+  const cols=best.cols, totalCells=rows*cols;
+  const basePerRow=Math.floor(totalCells/rows), rem=totalCells-basePerRow*rows;
+  const addOrder = rotate([...Array(rows).keys()], Math.floor(rand()*rows));
+  const targetRowCells=Array.from({length:rows},()=>basePerRow);
+  for(let i=0;i<rem;i++){ targetRowCells[addOrder[i]]++; }
+  let quotasD=largestRemainderQuotas(best.D,targetRowCells);
+  let quotasV=largestRemainderQuotas(best.V,targetRowCells);
+  quotasD = rotate(quotasD, Math.floor(rand()*rows));
+  quotasV = rotate(quotasV, Math.floor(rand()*rows));
+  return {cols,rows,totalCells,targetRowCells,quotasD,quotasV,pairs,plan:{D:best.D,V:best.V},desired:{D:D_desired,V:V_desired}};
+}
+function packRows(charData, plan){
+  const { rows, targetRowCells, quotasD, quotasV, pairs } = plan;
+  const pairSet=new Set(pairs);
+  const consumed=new Set();
+  const placements=[];
+  let globalCellsRemaining=targetRowCells.reduce((a,b)=>a+b,0);
+  let globalCharsRemaining=charData.length;
+
+  let i=0;
+  for(let r=0;r<rows;r++){
+    let cellsLeft=targetRowCells[r], rowD=quotasD[r]||0, rowV=quotasV[r]||0;
+    while(cellsLeft>0){
+      if(i>=charData.length){ cellsLeft=0; break; }
+      if(consumed.has(i)){ i++; continue; }
+      const cur=charData[i], next=(i+1<charData.length)?charData[i+1]:null;
+      const canDouble=cur.isFirstChar;
+      const canDivide=next && pairSet.has(i) && !consumed.has(i+1);
+      const safeToDivide = canDivide && (globalCharsRemaining-2) >= (globalCellsRemaining-1);
+
+      if (cellsLeft>=2 && canDouble && rowD>0 && safeToDivide && rowV>0){
+        const pickDouble = (rowD/(rowD+rowV)) > rand();
+        if (pickDouble){
+          placements.push({row:r,kind:'double',ids:[i]});
+          consumed.add(i); i++; cellsLeft-=2; globalCellsRemaining-=2; globalCharsRemaining-=1; rowD--;
+          continue;
+        } else {
+          placements.push({row:r,kind:'divided',ids:[i,i+1]});
+          consumed.add(i); consumed.add(i+1); i+=2; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=2; rowV--;
+          continue;
+        }
+      }
+      if (cellsLeft>=2 && canDouble && rowD>0){
+        placements.push({row:r,kind:'double',ids:[i]});
+        consumed.add(i); i++; cellsLeft-=2; globalCellsRemaining-=2; globalCharsRemaining-=1; rowD--; continue;
+      }
+      if (safeToDivide && rowV>0){
+        placements.push({row:r,kind:'divided',ids:[i,i+1]});
+        consumed.add(i); consumed.add(i+1); i+=2; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=2; rowV--; continue;
+      }
+      if (cellsLeft>=2 && canDouble){
+        placements.push({row:r,kind:'double',ids:[i]});
+        consumed.add(i); i++; cellsLeft-=2; globalCellsRemaining-=2; globalCharsRemaining-=1; continue;
+      }
+      if (safeToDivide){
+        placements.push({row:r,kind:'divided',ids:[i,i+1]});
+        consumed.add(i); consumed.add(i+1); i+=2; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=2; continue;
+      }
+      placements.push({row:r,kind:'normal',ids:[i]});
+      consumed.add(i); i++; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=1;
+    }
+  }
+  const usedChars=[...consumed].length;
+  return { placements, usedChars };
+}
+
+class Cell{
+  constructor(x,y,w,h,char,isFirst,type='normal',isSpace=false){this.x=x|0;this.y=y|0;this.width=w|0;this.height=h|0;this.char=char;this.isFirstChar=!!isFirst;this.type=type;this.isSpace=!!isSpace;}
+  draw(bgGroup,textGroup){
+    const pad=getCellPadding();
+    const bgX=this.x+pad, bgY=this.y+pad;
+    const bgW=this.width-pad*2, bgH=this.height-pad*2;
+    if(bgW<=0||bgH<=0) return;
+
+    const mode=currentBgMode();
+    const overlayActive=$('#overlayText').checked;
+    const applyColorTo = currentApplyColorTo();
+
+    // background rect - SVG fill color
+    let bgFill='#000000';
+    if (mode==='color'){
+      // For spaces when custom space color is enabled, use the custom space color for background
+      if (this.isSpace && $('#customSpaceColor').checked) {
+        bgFill = $('#spaceColorPicker').value.trim();
+      } else {
+        // Use regular color system
+        if (applyColorTo==='background') {
+          bgFill = tileBgColor(this.char);
+        } else {
+          // text mode - use canvas background for tiles
+          bgFill = $('#bgColorPicker').value.trim();
+        }
+      }
+    } else if (mode==='single') {
+      const canvasBg=$('#bgColorPicker').value.trim();
+      const cellBg=$('#cellBgColorPicker').value.trim();
+      bgFill = (cellBg.toLowerCase()!==canvasBg.toLowerCase()) ? cellBg : canvasBg;
+    }
+    
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',bgX); rect.setAttribute('y',bgY);
+    rect.setAttribute('width',bgW); rect.setAttribute('height',bgH);
+    rect.setAttribute('fill',bgFill);
+    bgGroup.appendChild(rect);
+
+    // overlay text
+    if (overlayActive){
+      const baseH=currentGridConfig?.bestConfig?.cellH || bgH;
+      const overlayPct=parseInt($('#overlayMarginSlider').value||'0',10);
+      const extra=Math.round(Math.max(1, baseH - 2*getCellPadding()) * (overlayPct/100));
+      const px=bgX+extra, py=bgY+extra;
+      const pw=bgW-extra*2, ph=bgH-extra*2;
+      if(pw>0&&ph>0) {
+        // Determine text stroke color
+        let textColor = null;
+        if (mode==='color' && applyColorTo==='text') {
+          textColor = tileBgColor(this.char);
+        }
+        drawBezierChar(textGroup,px,py,pw,ph,this.char,this.isFirstChar,textColor);
+      }
+    }
+  }
+}
+
+/* ==== BASIC grid (no grid alignment, center rows, no empty tiles, balanced) ==== */
+function layoutBasicBalanced(rows, innerW, innerH, size){
+  // Build words (no hyphenation)
+  let original = ($('#phraseInput').value || '').toUpperCase()
+    .replace(/[""]/g,'"').replace(/—/g,'-').replace(/…/g,'...').trim();
+  
+  const words = original.length ? original.split(/\s+/) : [];
+  if (words.length===0) return {cells:[],bestConfig:null};
+
+  // Check if spaces should be included based on user preference
+  const includeSpaces = $('#includeSpaces').checked;
+
+  // measure by character count (including single spaces between words if enabled)
+  const wordLens = words.map(w=>w.length);
+  const totalChars = wordLens.reduce((a,b)=>a+b,0) + (includeSpaces ? Math.max(0, words.length-1) : 0);
+
+  // target per line & per-line cap
+  const target = Math.max(1, Math.round(totalChars / rows));
+  const maxPerLine = Math.max(target, Math.floor(target*1.35)); // allow a bit longer lines
+
+  // DP: split words across up to 'rows' lines minimizing squared deviation from 'target'
+  // cost(i,j) = length of words i..j plus spaces between (j-i) if spaces are included
+  const n=words.length;
+  const prefixLen=[0];
+  for(let i=0;i<n;i++) prefixLen[i+1]=prefixLen[i]+wordLens[i];
+
+  function lineLen(i,j){ // inclusive i..j
+    const letters = prefixLen[j+1]-prefixLen[i];
+    const spaces = includeSpaces ? (j-i) : 0; // spaces only if includeSpaces is true
+    return letters + spaces;
+  }
+  function bad(len,isLast){
+    if (len<1) return 1e9;
+    if (len>maxPerLine) return 1e9;               // hard cap
+    return isLast ? Math.pow(Math.max(0,len-target),2) * 0.5   // softer penalty on last
+                  : Math.pow(Math.abs(len-target),2);
+  }
+
+  // dp[k][j] = min cost using k lines to place first j words (0..j-1)
+  const dp=Array.from({length:rows+1},()=>Array(n+1).fill(1e15));
+  const prev=Array.from({length:rows+1},()=>Array(n+1).fill(-1));
+  dp[0][0]=0;
+
+  for(let k=1;k<=rows;k++){
+    for(let j=1;j<=n;j++){
+      for(let i=0;i<j;i++){
+        const len=lineLen(i,j-1);
+        const isLast = (k===rows && j===n);
+        const cost=dp[k-1][i]+bad(len,isLast);
+        if(cost<dp[k][j]){
+          dp[k][j]=cost; prev[k][j]=i;
+        }
+      }
+    }
+  }
+  // backtrack the split points
+  let k=rows, j=n, splits=[];
+  while(k>0 && j>0){
+    const i=prev[k][j];
+    if(i<0){ // fallback greedy if DP failed
+      splits=[0,n]; break;
+    }
+    splits.push([i,j-1]);
+    j=i; k--;
+  }
+  splits.reverse();
+
+  // build line strings (with spaces between words only if includeSpaces is true)
+  const lines = splits.map(([i,j])=>{
+    if (includeSpaces) {
+      // When spaces are included, use replacement character if specified
+      const spaceChar = $('#replaceSpaceChar').checked ? ($('#replaceCharText').value || '_') : ' ';
+      return words.slice(i,j+1).join(spaceChar);
+    } else {
+      return words.slice(i,j+1).join('');
+    }
+  });
+  // If dp used fewer lines than rows, pad with empty lines to keep vertical spacing even
+  while(lines.length<rows) lines.push('');
+
+  // sizing: uniform height per row; width sized by longest visual row
+  const longestLen = Math.max(1, ...lines.map(s=>s.length));
+  const cellH=Math.max(1,Math.floor(innerH/rows));
+  const cellW=Math.max(1,Math.floor(innerW/longestLen));
+  const startY = Math.floor((size.height - rows*cellH)/2);
+
+  const cells=[];
+  for(let r=0;r<rows;r++){
+    const line = lines[r] || '';
+    const nChars = line.length;
+    if(nChars===0) continue; // no empty row tiles rendered
+
+    // center horizontally per row
+    const rowW = nChars * cellW;
+    const startX = Math.floor((size.width - rowW)/2);
+
+    // emit exactly nChars tiles (no padding)
+    for(let c=0;c<nChars;c++){
+      const ch=line[c];
+      const isFirst=isFirstCharInBasic(line,c);
+      const isSpace = (includeSpaces && (ch === ' ' || ($('#replaceSpaceChar').checked && ch === ($('#replaceCharText').value || '_'))));
+      const x=startX + c*cellW;
+      const y=startY + r*cellH;
+      cells.push(new Cell(x,y,cellW,cellH,ch,isFirst,'normal',isSpace));
+    }
+  }
+
+  return {
+    cells,
+    bestConfig:{rows,cols:longestLen,cellW,cellH,totalCells:cells.length}
+  };
+}
+function isFirstCharInBasic(line, idx){
+  if (!line[idx] || line[idx]===' ') return false;
+  if (idx===0) return true;
+  return line[idx-1]===' ';
+}
+
+/* ==== main render ==== */
+function generateGrid(newRandom=false){
+  try{
+    if (newRandom) runNonce=Math.random();
+    const stage=document.getElementById('stage'); stage.innerHTML='';
+
+    const rawText=(document.getElementById('phraseInput').value || `Here's to the crazy ones, the misfits, the rebels, the troublemakers, the round pegs in the square holes... the ones who see things differently - they're not fond of rules... You can quote them, disagree with them, glorify or vilify them, but the only thing you can't do is ignore them because they change things... they push the human race forward, and while some may see them as the crazy ones, we see genius, because the ones who are crazy enough to think that they can change the world, are the ones who do. - Steve Jobs, 1997`)
+      .toUpperCase().replace(/[""]/g,'"').replace(/—/g,'-').replace(/…/g,'...');
+    if(!rawText.trim()) return;
+
+    const size=getCanvasSize();
+    const margin=document.getElementById('screenSize').checked?getGridMargin():0;
+    const innerW=Math.max(1,size.width-margin*2), innerH=Math.max(1,size.height-margin*2);
+    stage.setAttribute('viewBox',`0 0 ${size.width} ${size.height}`);
+
+    const gridType=currentGridType();
+
+    // Build charData for tessellated only; Basic uses its own line builder
+    let currentOutput=null;
+
+    if (gridType==='basic'){
+      currentOutput = layoutBasicBalanced(parseInt($('#rowSlider').value,10), innerW, innerH, size);
+    } else {
+      const includeSpaces=$('#includeSpaces').checked;
+      let text=rawText;
+      
+      const charData=[]; let wordIndex=0, firstInWord=true;
+      for(let i=0;i<text.length;i++){
+        const ch=text[i];
+        if(ch===' '&&!includeSpaces){ firstInWord=true; continue; }
+        if(ch===' '&&includeSpaces){ 
+          // When include spaces is on, render space as a tile (either as space or replaced character)
+          const displayChar = $('#replaceSpaceChar').checked ? ($('#replaceCharText').value || '_') : ' ';
+          charData.push({char:displayChar,isFirstChar:false,wordIndex,originalIndex:i,isSpace:true}); 
+          firstInWord=true; wordIndex++; 
+        }
+        else { charData.push({char:ch,isFirstChar:firstInWord,wordIndex,originalIndex:i,isSpace:false}); if(firstInWord) firstInWord=false; else if(i+1<text.length && text[i+1]===' ') wordIndex++; }
+      }
+      if(!charData.length) return;
+
+      const rows=parseInt($('#rowSlider').value,10);
+      let colsHint=null, success=false, tries=0;
+      while(!success && tries<120){
+        const plan=planGrid(charData, rows, colsHint);
+        const cols=plan.cols;
+        const cellW=Math.max(1,Math.floor(innerW/cols));
+        const cellH=Math.max(1,Math.floor(innerH/rows));
+        const gridW=cols*cellW, gridH=rows*cellH;
+        const startX=Math.floor((size.width-gridW)/2);
+        const startY=Math.floor((size.height-gridH)/2);
+
+        const {placements, usedChars}=packRows(charData, plan);
+        const totalCells=rows*cols;
+        const placedCells=placements.reduce((s,p)=>s+(p.kind==='double'?2:1),0);
+        const usedAll=(usedChars===charData.length);
+        const filledAll=(placedCells===totalCells);
+
+        if(usedAll && filledAll){
+          const cells=[]; let colIndexPerRow=Array(rows).fill(0);
+          for(const p of placements){
+            const r=p.row, c=colIndexPerRow[r];
+            const x=startX + c*cellW, y=startY + r*cellH;
+            if (p.kind==='double'){
+              const c0=charData[p.ids[0]];
+              cells.push(new Cell(x,y,cellW*2,cellH,c0.char,c0.isFirstChar,'double',c0.isSpace));
+              colIndexPerRow[r]+=2;
+            } else if (p.kind==='divided'){
+              const h1=Math.floor(cellH/2), h2=cellH-h1;
+              const cA=charData[p.ids[0]], cB=charData[p.ids[1]];
+              cells.push(new Cell(x,y,cellW,h1,cA.char,cA.isFirstChar,'split',cA.isSpace));
+              cells.push(new Cell(x,y+h1,cellW,h2,cB.char,cB.isFirstChar,'split',cB.isSpace));
+              colIndexPerRow[r]+=1;
+            } else {
+              const c0=charData[p.ids[0]];
+              cells.push(new Cell(x,y,cellW,cellH,c0.char,c0.isFirstChar,'normal',c0.isSpace));
+              colIndexPerRow[r]+=1;
+            }
+          }
+          currentOutput={cells, bestConfig:{rows,cols,cellW,cellH,totalCells}};
+          success=true;
+        } else {
+          colsHint = !filledAll ? Math.max(1, plan.cols - 1) : plan.cols + 1;
+          tries++;
+        }
+      }
+    }
+
+    if(!currentOutput || !currentOutput.cells.length) {
+      // Main canvas background even if nothing else
+      const bgOnly=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      bgOnly.setAttribute('x','0'); bgOnly.setAttribute('y','0');
+      bgOnly.setAttribute('width',String(size.width)); bgOnly.setAttribute('height',String(size.height));
+      bgOnly.setAttribute('fill',$('#bgColorPicker').value.trim());
+      stage.appendChild(bgOnly);
+      return;
+    }
+
+    currentGridConfig={ bestConfig: currentOutput.bestConfig };
+    currentCells=currentOutput.cells;
+
+    // Main canvas background
+    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bg.setAttribute('x','0'); bg.setAttribute('y','0');
+    bg.setAttribute('width',String(size.width)); bg.setAttribute('height',String(size.height));
+    bg.setAttribute('fill',$('#bgColorPicker').value.trim());
+    stage.appendChild(bg);
+
+    // Tile backgrounds group (lower than text)
+    const gBg=document.createElementNS('http://www.w3.org/2000/svg','g'); gBg.setAttribute('id','bgTiles'); stage.appendChild(gBg);
+    // Text group (highest)
+    const gText=document.createElementNS('http://www.w3.org/2000/svg','g'); gText.setAttribute('id','textTiles'); stage.appendChild(gText);
+
+    for(const cell of currentOutput.cells) cell.draw(gBg,gText);
+
+  }catch(err){
+    console.error(err);
+  }
+}
+function redrawGrid(){ generateGrid(false); }
+
+/* save/copy */
+function saveSVG(){
+  const svg=document.getElementById('stage');
+  svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const xml=new XMLSerializer().serializeToString(svg);
+  const blob=new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n',xml],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='tessellation.svg';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},0);
+}
+async function copySVG(){
+  const svg=document.getElementById('stage');
+  svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const xml='<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg);
+
+  try{
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(xml);
+    } else {
+      const ta=document.createElement('textarea');
+      ta.value=xml; ta.style.position='fixed'; ta.style.opacity='0'; ta.style.pointerEvents='none';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    flashButton('#copyBtn');
+  }catch(err){
+    console.error('Clipboard copy failed:', err);
+    alert('Copy failed. Your browser may block clipboard access outside HTTPS.');
+  }
+}
+function flashButton(sel){
+  const btn=$(sel); if(!btn) return;
+  const old=btn.style.boxShadow;
+  btn.style.boxShadow='0 0 0 3px rgba(23,162,184,.7)';
+  setTimeout(()=>btn.style.boxShadow=old,350);
+}
+
+/* Play */
+function regenerate(){
+  const gridType=currentGridType();
+  if (gridType==='tessellated'){
+    const r=()=>Math.round(10 + rand()*80);
+    $('#densitySlider').value = r();
+    $('#doubleWidthSlider').value = r();
+  }
+  currentCells=null;
+  generateGrid(true);
+}
+
+/* Color sliders */
+function updateColorRange(){ redrawGrid(); }
+function updateSaturation(){ redrawGrid(); }
+function updateContrast(){ redrawGrid(); }
+function updateBrightness(){ redrawGrid(); }
+
+/* wire-up */
+window.onload=()=>{
+  // bg mode switch
+  document.querySelectorAll('input[name="bgMode"]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const mode=currentBgMode();
+      document.getElementById('singleControls').style.display = mode==='single' ? 'block' : 'none';
+      document.getElementById('colorControls').style.display  = mode==='color'  ? 'block' : 'none';
+      if(mode==='color'){ $('#overlayText').checked=true; }
+      updateOverlayUIEnabled(); toggleSpaceControls(); currentCells=null; generateGrid(true);
+    });
+  });
+
+  // apply color to switch
+  document.querySelectorAll('input[name="applyColor"]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      currentCells=null; generateGrid(true);
+    });
+  });
+
+  // grid type switch
+  document.querySelectorAll('input[name="gridType"]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const gt=currentGridType();
+      // show/hide tessellated-only controls
+      $('#tessControls').style.display = (gt==='tessellated') ? 'block':'none';
+      currentCells=null; generateGrid(true);
+    });
+  });
+
+  document.getElementById('customSpaceColor').addEventListener('change', toggleSpaceControls);
+  document.getElementById('replaceSpaceChar').addEventListener('change', updateReplaceCharVisibility);
+  document.getElementById('canvasWidth').addEventListener('change', ()=>{currentCells=null;generateGrid(true);});
+  document.getElementById('canvasHeight').addEventListener('change', ()=>{currentCells=null;generateGrid(true);});
+
+  updateRows(); updateDensity(); updateDoubleWidth(); updatePadding(); updateMargin();
+  updateThicknessDisplay(); updateOverlayUIEnabled();
+  $('#bgColorPicker').value='#000000';
+  $('#firstLetterColorPicker').value='#ffffff';
+  $('#otherTextColorPicker').value='#bfbfbf';
+  $('#cellBgColorPicker').value='#000000';
+  $('#spaceColorPicker').value='#404040';
+  setHex('#bgHex', '#000000');
+  setHex('#firstHex', '#ffffff');
+  setHex('#otherHex', '#bfbfbf');
+  setHex('#cellBgHex', '#000000');
+  setHex('#spaceHex', '#404040');
+
+  $('#canvasContainer').style.backgroundColor='#000000';
+
+  const ta=document.getElementById('phraseInput');
+  ta.value = `Here's to the crazy ones, the misfits, the rebels, the troublemakers, the round pegs in the square holes... the ones who see things differently - they're not fond of rules... You can quote them, disagree with them, glorify or vilify them, but the only thing you can't do is ignore them because they change things... they push the human race forward, and while some may see them as the crazy ones, we see genius, because the ones who are crazy enough to think that they can change the world, are the ones who do. - Steve Jobs, 1997`;
+  ta.addEventListener('keydown',(e)=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault(); regenerate();} });
+
+  // default UI visibility
+  $('#tessControls').style.display='block';
+  updateReplaceCharVisibility();
+
+  generateGrid(true);
+};
+window.addEventListener('resize',()=>{ if($('#screenSize').checked){ currentCells=null; generateGrid(true); }});
+document.addEventListener('keydown',(e)=>{ if(e.code==='Space'&&!e.target.matches('input,textarea')){e.preventDefault(); regenerate();} if(e.code==='Escape'){toggleSidebar();}});
+</script>
+</body>
+</html>
