@@ -6,11 +6,16 @@
 <title>Tessellated Bezier Text Tiles</title>
 <style>
   *{box-sizing:border-box}
-  body{margin:0;padding:0;background:#000;height:100vh;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
-  #sidebarWrapper{position:absolute;left:0;top:0;height:100vh;width:340px;z-index:10;transition:transform .3s ease}
-  body.sidebar-collapsed #sidebarWrapper{transform:translateX(-340px)}
-  #sidebar{height:100vh;overflow:auto;background:#f0f0f0;border-right:1px solid #ddd;padding:14px}
-  .section{margin-bottom:16px;border-bottom:1px solid #ddd;padding-bottom:12px}
+  :root{
+    --app-bg:#1a1a1a;  /* super main background */
+    --bg:#000; --panel:#f0f0f0; --border:#ddd; --ink:#333;
+    --pad:14px; --sidebar-w:340px; --btn:36px;
+  }
+  body{margin:0;padding:0;background:var(--app-bg);height:100vh;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+  #sidebarWrapper{position:absolute;left:0;top:0;height:100vh;width:var(--sidebar-w);z-index:10;transition:transform .3s ease}
+  body.sidebar-collapsed #sidebarWrapper{transform:translateX(calc(var(--sidebar-w) * -1))}
+  #sidebar{height:100vh;overflow:auto;background:var(--panel);border-right:1px solid var(--border);padding:var(--pad)}
+  .section{margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px}
   .section:last-child{border-bottom:none}
   .section h3{margin:0 0 8px;font-size:16px}
   .row{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
@@ -18,30 +23,57 @@
   .row.compact{gap:8px;margin:4px 0}
   .row.compact label{min-width:80px;font-size:13px}
   .control-group{background:#f8f8f8;border-radius:6px;padding:12px;margin:8px 0}
-  .control-group h4{margin:0 0 8px;font-size:14px;color:#666;font-weight:600}
-  #canvasContainer{position:absolute;left:340px;right:0;top:0;bottom:0;background:#000;overflow:auto;transition:left .3s ease}
+  .control-group h4{margin:0 0 8px;font-size:14px;color:#666;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+
+  /* Canvas area centers content when manual size is used */
+  #canvasContainer{
+    position:absolute;left:var(--sidebar-w);right:0;top:0;bottom:0;
+    background:var(--app-bg); /* dark grey outside the artwork */
+    overflow:auto;transition:left .3s ease;
+    display:flex;align-items:center;justify-content:center;
+  }
   body.sidebar-collapsed #canvasContainer{left:0}
+
+  /* New artboard wrapper so manual sizing is centered cleanly */
+  #artboard{display:block;width:100%;height:100%}
   #stage{display:block;width:100%;height:100%}
-  #toggleWrapper{position:fixed;top:10px;left:10px;z-index:20;display:flex;gap:8px}
-  .btn{width:36px;height:36px;border:0;border-radius:6px;background:#333;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
+
+  #toggleWrapper{position:fixed;top:10px;left:10px;z-index:200;display:flex;gap:8px;transition:opacity .3s ease, visibility .3s ease}
+  .btn{width:var(--btn);height:var(--btn);border:0;border-radius:6px;background:#333;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}
   #toggleSidebar{font-size:20px}
   #regen{background:#28a745;font-size:16px}
   #saveBtn{background:#0069d9;font-size:16px}
   #copyBtn{background:#17a2b8;font-size:16px}
-  #fullscreenBtn{position:fixed;top:10px;right:10px;z-index:20}
+  #saveImageBtn{background:#6f42c1;font-size:16px}
+  #fullscreenBtn{position:fixed;top:10px;right:10px;z-index:200;transition:opacity .3s ease, visibility .3s ease}
   textarea{width:100%;height:120px;padding:10px;border:1px solid #999;border-radius:8px;resize:vertical}
   .picker{width:36px;height:36px;border:1px solid #999;border-radius:6px;padding:0}
   .disabled{opacity:.5;pointer-events:none}
-  /* segmented button bar */
   .segbar{display:inline-flex;border:1px solid #bbb;border-radius:8px;overflow:hidden}
   .segbar input{display:none}
   .segbar label{padding:6px 12px;background:#e9e9e9;cursor:pointer;font-size:13px;user-select:none}
   .segbar label+label{border-left:1px solid #bbb}
   .segbar input:checked+label{background:#333;color:#fff}
-  /* tiny hex badges */
   .hexbadge{font-family:monospace;background:#fff;border:1px solid #bbb;border-radius:6px;padding:4px 6px}
-  /* color text inputs */
   .color-text{width:80px;padding:4px 8px;border:1px solid #999;border-radius:4px;font-family:monospace;font-size:13px}
+
+  /* Hide buttons only when fullscreen AND sidebar is hidden */
+  body.fullscreen-ui-hidden #toggleWrapper,
+  body.fullscreen-ui-hidden #fullscreenBtn{
+    opacity:0;visibility:hidden;pointer-events:none;
+  }
+
+  /* Generic modal */
+  .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:500;opacity:0;visibility:hidden;transition:opacity .2s ease,visibility .2s ease}
+  .modal.open{opacity:1;visibility:visible}
+  .modal .card{background:#fff;border-radius:12px;min-width:320px;max-width:90vw;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .modal .card h3{margin:0 0 8px;font-size:18px}
+  .modal .card p{margin:0 0 12px;color:#555}
+  .modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+  .modal .actions button{padding:10px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600}
+  .btn-primary{background:#6f42c1;color:#fff}
+  .btn-secondary{background:#0069d9;color:#fff}
+  .btn-ghost{background:#e9e9e9;color:#222}
 </style>
 </head>
 <body>
@@ -49,11 +81,11 @@
     <div id="sidebar">
       <div class="section">
         <h3>Canvas &amp; Grid</h3>
-        <textarea id="phraseInput" placeholder="Enter your text here..." oninput="currentCells=null;generateGrid()" style="margin-bottom:12px"></textarea>
+        <textarea id="phraseInput" placeholder="Enter your text here..." style="margin-bottom:12px"></textarea>
         
         <div class="control-group">
           <h4>Canvas Size</h4>
-          <div class="row"><label>Auto-fit</label><input type="checkbox" id="screenSize" checked onchange="toggleScreenSize()" /></div>
+          <div class="row"><label>Auto-fit</label><input type="checkbox" id="screenSize" checked /></div>
           <div id="manualSize" class="disabled">
             <div class="row compact"><label>Width</label><input type="number" id="canvasWidth" value="1200" min="200" style="width:80px" /></div>
             <div class="row compact"><label>Height</label><input type="number" id="canvasHeight" value="800" min="200" style="width:80px" /></div>
@@ -62,7 +94,14 @@
 
         <div class="control-group">
           <h4>Grid Layout</h4>
-          <div class="row"><label>Rows</label><input type="range" id="rowSlider" min="1" max="50" value="15" oninput="updateRows()" style="flex:1"></div>
+          <div class="row">
+            <label>Rows</label>
+            <input type="range" id="rowSlider" min="1" max="50" value="15" style="flex:1">
+            <span class="row compact" style="margin-left:auto;gap:6px">
+              <label style="min-width:auto;font-weight:600">Auto</label>
+              <input type="checkbox" id="autoRows" checked>
+            </span>
+          </div>
           <div class="row">
             <label>Type</label>
             <div class="segbar" id="gridTypeBar">
@@ -71,44 +110,42 @@
             </div>
           </div>
           <div id="tessControls">
-            <div class="row compact"><label>Half Tile</label><input type="range" id="densitySlider" min="0" max="100" value="52" oninput="updateDensity()" style="flex:1"></div>
-            <div class="row compact"><label>Double Tile</label><input type="range" id="doubleWidthSlider" min="0" max="100" value="81" oninput="updateDoubleWidth()" style="flex:1"></div>
+            <div class="row compact"><label>Half Tile</label><input type="range" id="densitySlider" min="0" max="100" value="52" style="flex:1"></div>
+            <div class="row compact"><label>Double Tile</label><input type="range" id="doubleWidthSlider" min="0" max="100" value="81" style="flex:1"></div>
           </div>
-          <div class="row" id="includeSpacesRow"><label>Include Spaces</label><input type="checkbox" id="includeSpaces" onchange="currentCells=null;generateGrid();updateSpaceControlsVisibility();"></div>
+          <div class="row" id="includeSpacesRow"><label>Include Spaces</label><input type="checkbox" id="includeSpaces"></div>
           <div class="control-group" id="spaceControls" style="display:none">
             <h4>Space Settings</h4>
-            <div class="row compact"><label>Custom Space Color</label><input type="checkbox" id="customSpaceColor" onchange="toggleSpaceControls()"></div>
+            <div class="row compact"><label>Custom Space Color</label><input type="checkbox" id="customSpaceColor"></div>
             <div class="row compact" id="spaceColorRow" style="display:none">
               <label>Space Color</label>
-              <input type="color" id="spaceColorPicker" class="picker" value="#404040" onchange="syncSpaceColorFromPicker()">
-              <input type="text" id="spaceColorText" class="color-text" value="#404040" oninput="syncSpaceColorFromText()">
+              <input type="color" id="spaceColorPicker" class="picker" value="#404040">
+              <input type="text" id="spaceColorText" class="color-text" value="#404040">
             </div>
-            
             <div class="control-group" id="specialCharControls">
               <h4>Special Characters</h4>
               <div class="row compact">
                 <label>Replace Space</label>
-                <input type="checkbox" id="replaceSpaceChar" onchange="redrawGrid()">
+                <input type="checkbox" id="replaceSpaceChar">
               </div>
-              <div class="row compact" id="replaceCharRow">
+                <div class="row compact" id="replaceCharRow">
                 <label>With Character</label>
-                <input type="text" id="replaceCharText" value="_" maxlength="1" onchange="redrawGrid()" style="width:40px">
+                <input type="text" id="replaceCharText" value="_" maxlength="1" style="width:40px">
               </div>
             </div>
           </div>
-        
         </div>
 
         <div class="control-group">
           <h4>Spacing</h4>
-          <div class="row compact"><label>Cell Padding</label><input type="range" id="paddingSlider" min="0" max="10" value="4" oninput="updatePadding()" style="flex:1"></div>
-          <div class="row compact"><label>Canvas Margin</label><input type="range" id="marginSlider" min="0" max="200" value="20" oninput="updateMargin()" style="flex:1"></div>
+          <div class="row compact"><label>Cell Padding</label><input type="range" id="paddingSlider" min="0" max="10" value="4" style="flex:1"></div>
+          <div class="row compact"><label>Canvas Margin</label><input type="range" id="marginSlider" min="0" max="200" value="20" style="flex:1"></div>
         </div>
 
         <div class="row">
           <label>Canvas BG</label>
-          <input type="color" id="bgColorPicker" class="picker" value="#000000" onchange="syncBgColorFromPicker()">
-          <input type="text" id="bgColorText" class="color-text" value="#000000" oninput="syncBgColorFromText()">
+          <input type="color" id="bgColorPicker" class="picker" value="#000000">
+          <input type="text" id="bgColorText" class="color-text" value="#000000">
         </div>
       </div>
 
@@ -116,36 +153,44 @@
         <h3>Text Appearance</h3>
         <div class="row">
           <label>Overlay Text</label>
-          <input type="checkbox" id="overlayText" checked onchange="onOverlayToggle()">
+          <input type="checkbox" id="overlayText" checked>
         </div>
         <div class="row" id="overlayMarginRow">
           <label>Text Margin</label>
-          <input type="range" id="overlayMarginSlider" min="0" max="30" value="10" oninput="updateOverlayMargin()" style="flex:1">
+          <input type="range" id="overlayMarginSlider" min="0" max="30" value="10" style="flex:1">
+          <label style="min-width:auto">Text Opacity</label>
+          <input type="range" id="textOpacitySlider" min="0" max="100" value="100" style="width:160px">
         </div>
         
         <div class="control-group">
           <h4>Initial Character</h4>
           <div class="row compact">
             <label>Color</label>
-            <input type="color" id="firstLetterColorPicker" class="picker" value="#ffffff" onchange="syncFirstFromPicker()">
-            <input type="text" id="firstLetterColorText" class="color-text" value="#ffffff" oninput="syncFirstFromText()">
+            <input type="color" id="firstLetterColorPicker" class="picker" value="#ffffff">
+            <input type="text" id="firstLetterColorText" class="color-text" value="#ffffff">
           </div>
           <div class="row compact">
             <label>Weight</label>
-            <input type="range" id="firstThickness" min="1" max="20" value="2" oninput="updateThicknessDisplay()" style="flex:1">
+            <input type="range" id="firstThickness" min="1" max="20" value="2" style="flex:1">
           </div>
         </div>
 
         <div class="control-group">
-          <h4>Other Characters</h4>
+          <h4>
+            <span>Other Characters</span>
+            <span class="row compact" style="gap:6px;margin:0">
+              <label style="min-width:auto;font-weight:600">Same as Initial</label>
+              <input type="checkbox" id="syncOtherToggle" checked>
+            </span>
+          </h4>
           <div class="row compact">
             <label>Color</label>
-            <input type="color" id="otherTextColorPicker" class="picker" value="#bfbfbf" onchange="syncOtherFromPicker()">
-            <input type="text" id="otherTextColorText" class="color-text" value="#bfbfbf" oninput="syncOtherFromText()">
+            <input type="color" id="otherTextColorPicker" class="picker" value="#bfbfbf">
+            <input type="text" id="otherTextColorText" class="color-text" value="#bfbfbf">
           </div>
           <div class="row compact">
             <label>Weight</label>
-            <input type="range" id="otherThickness" min="1" max="20" value="2" oninput="updateThicknessDisplay()" style="flex:1">
+            <input type="range" id="otherThickness" min="1" max="20" value="2" style="flex:1">
           </div>
         </div>
       </div>
@@ -171,8 +216,8 @@
             <h4>Single Color</h4>
             <div class="row compact">
               <label>Tile BG</label>
-              <input type="color" id="cellBgColorPicker" class="picker" value="#000000" onchange="syncCellBgFromPicker()">
-              <input type="text" id="cellBgColorText" class="color-text" value="#000000" oninput="syncCellBgFromText()">
+              <input type="color" id="cellBgColorPicker" class="picker" value="#000000">
+              <input type="text" id="cellBgColorText" class="color-text" value="#000000">
             </div>
           </div>
         </div>
@@ -180,15 +225,15 @@
         <div id="colorControls">
           <div class="control-group">
             <h4>Hue Range</h4>
-            <div class="row compact"><label>Center</label><input type="range" id="hueCenter" min="0" max="100" value="0" oninput="updateColorRange()" style="flex:1"></div>
-            <div class="row compact"><label>Radius</label><input type="range" id="hueRadius" min="0" max="50" value="30" oninput="updateColorRange()" style="flex:1"></div>
+            <div class="row compact"><label>Center</label><input type="range" id="hueCenter" min="0" max="100" value="0" style="flex:1"></div>
+            <div class="row compact"><label>Radius</label><input type="range" id="hueRadius" min="0" max="50" value="30" style="flex:1"></div>
           </div>
           
           <div class="control-group">
             <h4>Color Properties</h4>
-            <div class="row compact"><label>Saturation</label><input type="range" id="saturationSlider" min="0" max="200" value="70" oninput="updateSaturation()" style="flex:1"></div>
-            <div class="row compact"><label>Contrast</label><input type="range" id="contrastSlider" min="0" max="200" value="50" oninput="updateContrast()" style="flex:1"></div>
-            <div class="row compact"><label>Brightness</label><input type="range" id="brightnessSlider" min="0" max="200" value="50" oninput="updateBrightness()" style="flex:1"></div>
+            <div class="row compact"><label>Saturation</label><input type="range" id="saturationSlider" min="0" max="200" value="70" style="flex:1"></div>
+            <div class="row compact"><label>Contrast</label><input type="range" id="contrastSlider" min="0" max="200" value="50" style="flex:1"></div>
+            <div class="row compact"><label>Brightness</label><input type="range" id="brightnessSlider" min="0" max="200" value="50" style="flex:1"></div>
           </div>
         </div>
       </div>
@@ -197,35 +242,91 @@
         <h4>Tile Opacity</h4>
         <div class="row compact">
           <label>Opacity</label>
-          <input type="range" id="tileOpacitySlider" min="0" max="100" value="100" oninput="updateTileOpacity()" style="flex:1">
+          <input type="range" id="tileOpacitySlider" min="0" max="100" value="100" style="flex:1">
         </div>
       </div>
     </div>
   </div>
 
   <div id="canvasContainer">
-    <svg id="stage" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="artboard">
+      <svg id="stage" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
   </div>
 
   <div id="toggleWrapper">
-    <button id="toggleSidebar" class="btn" title="Toggle sidebar" onclick="toggleSidebar()">×</button>
-    <button id="regen" class="btn" title="Regenerate" onclick="regenerate()">▶</button>
-    <button id="saveBtn" class="btn" title="Save SVG" onclick="saveSVG()">💾</button>
-    <button id="copyBtn" class="btn" title="Copy SVG to Clipboard" onclick="copySVG()">📋</button>
+    <button id="toggleSidebar" class="btn" title="Toggle sidebar">×</button>
+    <button id="regen" class="btn" title="Regenerate">▶</button>
+    <button id="saveBtn" class="btn" title="Save SVG">💾</button>
+    <button id="copyBtn" class="btn" title="Copy SVG to Clipboard">📋</button>
+    <button id="saveImageBtn" class="btn" title="Save Image">🖼️</button>
   </div>
-  <button id="fullscreenBtn" class="btn" title="Toggle Fullscreen" onclick="toggleFullscreen()">⛶</button>
+  <button id="fullscreenBtn" class="btn" title="Toggle Fullscreen">⛶</button>
+
+  <!-- Save Image modal -->
+  <div id="saveImageModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="simTitle">
+      <h3 id="simTitle">Save Image</h3>
+      <p>Choose the export size.</p>
+      <div class="actions">
+        <button id="exportCurrentBtn" class="btn-secondary">Current size</button>
+        <button id="exportScreenBtn" class="btn-primary">Screen size</button>
+        <button id="exportCancelBtn" class="btn-ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save SVG modal -->
+  <div id="saveSvgModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="ssTitle">
+      <h3 id="ssTitle">Save SVG</h3>
+      <p>Choose the SVG size.</p>
+      <div class="actions">
+        <button id="svgCurrentBtn" class="btn-secondary">Current size</button>
+        <button id="svgScreenBtn" class="btn-primary">Screen size</button>
+        <button id="svgCancelBtn" class="btn-ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Copy SVG modal -->
+  <div id="copySvgModal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="csTitle">
+      <h3 id="csTitle">Copy SVG</h3>
+      <p>Choose the SVG size to copy.</p>
+      <div class="actions">
+        <button id="copyCurrentBtn" class="btn-secondary">Current size</button>
+        <button id="copyScreenBtn" class="btn-primary">Screen size</button>
+        <button id="copyCancelBtn" class="btn-ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
 
 <script>
-/* ==== randomness ==== */
-let runNonce=Math.random();
+/* ==========================================================
+   Utilities & small helpers
+========================================================== */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+let runNonce = Math.random();
+let lastRunSeed = runNonce;
+let EXPORT_SIZE_OVERRIDE = null; // {w,h} while exporting
+let lastAutoRows = 15;          // remembers last auto-picked rows
+
 function rand(){return Math.abs(Math.sin(runNonce+=0.1337))%1;}
 function shuffled(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function rotate(arr,k){const n=arr.length; if(!n) return arr.slice(); k=((k%n)+n)%n; return arr.slice(k).concat(arr.slice(0,k));}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function on(el, ev, fn){el.addEventListener(ev, fn); return el;}
+function debounce(fn,ms){let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)};}
+function validateHexColor(hex){const m=/^#([0-9A-Fa-f]{6})$/.exec(hex);return m?hex.toUpperCase():null;}
 
-/* ===== PATH DATA ===== */
-
-const O1 =[[50, 100], [22.38576, 100], [0, 77.61424], [0, 50], [0, 22.38576], [22.38576, 0], [50, 0], [77.61424, 0], [100, 22.38576], [100, 50], [100, 77.61424], [77.61424, 100], [50, 100] ];
-const T1= [[100, 50], [100, 62.59489], [95.80081, 75.89838], [85, 97.5], [70, 127.5], [60, 150], [50, 170] ];
+/* ==========================================================
+   PATH DATA
+========================================================== */
+const O1=[[50,100],[22.38576,100],[0,77.61424],[0,50],[0,22.38576],[22.38576,0],[50,0],[77.61424,0],[100,22.38576],[100,50],[100,77.61424],[77.61424,100],[50,100]];
+const T1=[[100,50],[100,62.59489],[95.80081,75.89838],[85,97.5],[70,127.5],[60,150],[50,170]];
 const AA=[[[50,0],[30.47378,39.05244],[19.52622,60.94756],[0,100]],[[50,0],[69.52622,39.05244],[80.47378,60.94756],[100,100]],[[15,70],[42.33671,70],[57.66329,70],[85,70]]];
 const A1=[[[0,100],[0,44.77153],[44.77153,0],[100,0]]];
 const T2=[[0,100],[0,98.55142],[0,97.60583],[0,95.86223],[0,86.02135],[2.2035,78.6779],[13.60175,71.83895],[25,65],[77.7965,33.8221],[86.39825,28.16105],[95,22.5],[100,13.97865],[100,4.13777],[100,2.45969],[100,1.47426],[100,0]];
@@ -289,11 +390,10 @@ const CHAR_SPECS={
   "'":["39O19000","39T19000"],
   ",":["41O19000","41T19000"],
   ".":["41O19000"],
-  "-":["18S23300"],
+  "-":["18S23300"]
 };
 function getSpecsForChar(ch){ if(ch===' ') return []; return CHAR_SPECS[(ch||'').toUpperCase()]||["01AA0000"]; }
 
-/* helpers */
 function toPaths(v){
   if(!v) return [];
   if(Array.isArray(v)&&Array.isArray(v[0])&&typeof v[0][0]==='number'){return [v.map(([x,y])=>[+x,+y])];}
@@ -310,43 +410,36 @@ function remapVals(arr,omin,omax,nmin,nmax){
   return arr.map(v=>nmin+(v-omin)*(nmax-nmin)/span);
 }
 function cubicSegments(controlPts){
-  const n = controlPts.length;
-  if (n < 4) return [];
-  const segs = (n - 1) / 3;
-  if (Math.abs(segs - Math.round(segs)) > 1e-9){
-    return [{ d: controlPts.reduce((acc,[x,y],i)=>acc+(i?` L ${x} ${y}`:`M ${x} ${y}`), "") }];
+  const n=controlPts.length;
+  if(n<4) return [];
+  const segs=(n-1)/3;
+  if(Math.abs(segs-Math.round(segs))>1e-9){
+    return [{ d: controlPts.reduce((a,[x,y],i)=>a+(i?` L ${x} ${y}`:`M ${x} ${y}`), "") }];
   }
   const out=[];
-  for (let s=0; s<segs; s++){
-    const i = 3*s;
-    const p0=controlPts[i], p1=controlPts[i+1], p2=controlPts[i+2], p3=controlPts[i+3];
+  for(let s=0;s<segs;s++){
+    const i=3*s;
+    const p0=controlPts[i], p1=controlPts[i+1], p2=controlPts[i+2], p3=i+3<controlPts.length?controlPts[i+3]:controlPts[i+2];
     out.push({ d:`M ${p0[0]} ${p0[1]} C ${p1[0]} ${p1[1]}, ${p2[0]} ${p2[1]}, ${p3[0]} ${p3[1]}` });
   }
   return out;
 }
 
-/* ---------- tiling (LL/UR human model) ---------- */
-const NARROW_SET = new Set(["B","P","S","0","5","2","R","9","8"]);
-function toLLUR(minX, minY, maxX, maxY){
-  const left = Math.min(minX, maxX);
-  const right = Math.max(minX, maxX);
-  const top = Math.min(minY, maxY);
-  const bottom = Math.max(minY, maxY);
-  return [[left, bottom],[right, top]];
+/* ==========================================================
+   Tiling helpers + drawing
+========================================================== */
+const NARROW_SET=new Set(["B","P","S","0","5","2","R","9","8"]);
+function toLLUR(minX,minY,maxX,maxY){
+  const left=Math.min(minX,maxX), right=Math.max(minX,maxX);
+  const top=Math.min(minY,maxY), bottom=Math.max(minY,maxY);
+  return [[left,bottom],[right,top]];
 }
-
-/* cell tiling */
-function tileBoxPython(tileType, d1, d2, d3, d4, BBMin, BBMax, ch){
-  const origWidth  = BBMax.x - BBMin.x;
-  const origHeight = BBMax.y - BBMin.y;
-  const width3   = NARROW_SET.has((ch||"").toUpperCase()) ? (origHeight * 0.5) : (origHeight * 2);
-  const tileWidth = Math.min(origWidth, origHeight, width3);
-  const tileD1 = d1 ? (tileWidth / d1) : 0;
-  const tileD2 = d2 ? (tileWidth / d2) : 0;
-  // d3 and d4 are available for future use
-  const midX = BBMin.x + origWidth  * 0.5;
-  const midY = BBMin.y + origHeight * 0.5;
-  const tileHeight = origHeight;
+function tileBoxPython(tileType,d1,d2,d3,d4,BBMin,BBMax,ch){
+  const origWidth=BBMax.x-BBMin.x, origHeight=BBMax.y-BBMin.y;
+  const width3=NARROW_SET.has((ch||"").toUpperCase())?(origHeight*0.5):(origHeight*2);
+  const tileWidth=Math.min(origWidth,origHeight,width3);
+  const tileD1=d1?(tileWidth/d1):0, tileD2=d2?(tileWidth/d2):0;
+  const midX=BBMin.x+origWidth*0.5, midY=BBMin.y+origHeight*0.5, tileHeight=origHeight;
 
   switch(tileType){
     case'01':return toLLUR(BBMin.x,BBMin.y,BBMax.x,BBMax.y);
@@ -393,280 +486,244 @@ function tileBoxPython(tileType, d1, d2, d3, d4, BBMin, BBMax, ch){
     default: return toLLUR(BBMin.x,BBMin.y,BBMax.x,BBMax.y);
   }
 }
-
-/* draw using LL/UR */
-function drawBezierTileSVG(svg, pMin, pMax, arrayKey, strokeWidth, strokeColor="#e6eef4"){
-  const minX = pMin[0], minY = pMin[1];
-  const maxX = pMax[0], maxY = pMax[1];
-
-  const w = Math.abs(maxX - minX);
-  const h = Math.abs(maxY - minY);
-  const x = Math.min(minX,maxX);
-  const y = Math.min(minY,maxY);
-
-  const paths = getPaths(arrayKey);
-  for (const pathArr of paths){
+function drawBezierTileSVG(svg,pMin,pMax,arrayKey,strokeWidth,strokeColor="#e6eef4"){
+  const minX=pMin[0], minY=pMin[1], maxX=pMax[0], maxY=pMax[1];
+  const w=Math.abs(maxX-minX), h=Math.abs(maxY-minY);
+  const x=Math.min(minX,maxX), y=Math.min(minY,maxY);
+  const paths=getPaths(arrayKey);
+  for(const pathArr of paths){
     const xs=pathArr.map(p=>p[0]), ys=pathArr.map(p=>p[1]);
     const mx=remapVals(xs,0,100,x,x+w), my=remapVals(ys,0,100,y,y+h);
-    const ctrl = mx.map((vx,i)=>[vx,my[i]]);
-    const segs = cubicSegments(ctrl);
-    for (const { d } of segs){
+    const ctrl=mx.map((vx,i)=>[vx,my[i]]);
+    const segs=cubicSegments(ctrl);
+    for(const {d} of segs){
       const el=document.createElementNS("http://www.w3.org/2000/svg","path");
-      el.setAttribute("d", d);
-      el.setAttribute("fill", "none");
-      el.setAttribute("stroke", strokeColor);
-      el.setAttribute("stroke-width", String(strokeWidth));
-      el.setAttribute("stroke-linecap", "round");
-      el.setAttribute("stroke-linejoin", "round");
+      el.setAttribute("d",d);
+      el.setAttribute("fill","none");
+      el.setAttribute("stroke",strokeColor);
+      el.setAttribute("stroke-width",String(strokeWidth));
+      el.setAttribute("stroke-linecap","round");
+      el.setAttribute("stroke-linejoin","round");
       el.setAttribute("vector-effect","non-scaling-stroke");
       svg.appendChild(el);
     }
   }
 }
 
-/* short-hands */
-function $(s){return document.querySelector(s);}
-let currentGridConfig=null;
-let currentCells=null;
-
-function preprocessText(text) {
-  // Only replace spaces with custom character if both Include Spaces and Replace Space are enabled
-  if ($('#includeSpaces').checked && $('#replaceSpaceChar').checked) {
-    const replaceChar = $('#replaceCharText').value || '_';
-    return text.replace(/ /g, replaceChar);
-  }
-  return text;
-}
-
-function strokeWidthPx(isFirst){
-  const v=isFirst?parseInt($('#firstThickness').value||'2',10):parseInt($('#otherThickness').value||'2',10);
-  return Math.max(1,v);
-}
-
-function currentApplyColorTo(){
-  const el=document.querySelector('input[name="applyColor"]:checked');
-  return el?el.value:'background';
-}
-
-function drawBezierChar(parent,x,y,w,h,ch,isFirst,colorOverride=null){
-  if(ch===' ') return;
-  const strokeColor = colorOverride || (isFirst ? $('#firstLetterColorPicker').value.trim() : $('#otherTextColorPicker').value.trim());
-  const specs = getSpecsForChar(ch);
-  if(!specs.length) return;
-
-  const BBMin={x:x,y:y,z:0};
-  const BBMax={x:x+w,y:y+h,z:0};
-  const strokeWidth = strokeWidthPx(isFirst);
-
-  for(const specRaw of specs){
-    const tileType = specRaw.slice(0,2);     // gridID (first 2 chars)
-    const arrayKey = specRaw.slice(2,4).trim(); // TileID (next 2 chars)
-    const d1 = parseInt(specRaw[4],10)||0;    // offsetPosition digit 1
-    const d2 = parseInt(specRaw[5],10)||0;    // offsetPosition digit 2
-    const d3 = parseInt(specRaw[6],10)||0;    // offsetPosition digit 3
-    const d4 = parseInt(specRaw[7],10)||0;    // offsetPosition digit 4
-    const [pMin, pMax] = tileBoxPython(tileType,d1,d2,d3,d4,BBMin,BBMax,ch);
-    if (pMin[0]===pMax[0] && pMin[1]===pMax[1]) continue;
-    drawBezierTileSVG(parent, pMin, pMax, arrayKey, strokeWidth, strokeColor);
-  }
-}
-
-/* ---------- color helpers ---------- */
+/* ==========================================================
+   Color helpers
+========================================================== */
 function hslToRgbString(h,s,l){
-  const a = s * Math.min(l, 1 - l);
-  const f = n => {
-    const k = (n + h * 12) % 12;
-    const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
-    return Math.round(c * 255);
+  const a=s*Math.min(l,1-l);
+  const f=n=>{
+    const k=(n+h*12)%12;
+    const c=l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));
+    return Math.round(c*255);
   };
   return `rgb(${f(0)}, ${f(8)}, ${f(4)})`;
 }
 function tileBgColor(char){
   const hueCenter=(parseInt($('#hueCenter').value,10)||0)/100;
   const hueRadius=(parseInt($('#hueRadius').value,10)||0)/100;
-  const satPct=Math.max(0,Math.min(200,parseInt($('#saturationSlider').value,10)||70));
-  const brightPct=Math.max(0,Math.min(200,parseInt($('#brightnessSlider').value,10)||100));
-  const contrastPct=Math.max(0,Math.min(200,parseInt($('#contrastSlider').value,10)||50));
+
+  const EPS = 1e-7;
+  const satPct = parseFloat($('#saturationSlider').value)||0;
+  const contrastPct = parseFloat($('#contrastSlider').value)||0;
+  const brightPct = parseFloat($('#brightnessSlider').value)||0;
+
+  const s = clamp(Math.max(EPS, satPct/100), 0, 1);
+  const baseL = clamp(0.5*Math.max(EPS, brightPct/100), 0, 1);
+  const spread = Math.max(EPS, (contrastPct/100)*0.4);
+
   const letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ', numbers='0123456789', punct=' .,!?\'"/-:;()[]{}@#$%&*+=<>~`|\\_';
   let t=.5;
   if(letters.includes(char)) t=letters.indexOf(char)/Math.max(1,letters.length-1);
   else if(numbers.includes(char)) t=numbers.indexOf(char)/Math.max(1,numbers.length-1);
   else if(punct.includes(char)) t=punct.indexOf(char)/Math.max(1,punct.length-1);
   else if(char===' '){
-    // For spaces: use custom color if specified, otherwise default space color
     if($('#customSpaceColor').checked) return $('#spaceColorPicker').value.trim();
-    t=0.0; // default space gets first position color
+    t=0.0;
   }
-  let h=(hueCenter-hueRadius)+(2*hueRadius)*t; while(h<0) h+=1; while(h>1) h-=1;
-  const s=Math.min(1, satPct/100);
-  const baseL = 0.5 * (brightPct/100);
-  const spread = (contrastPct/100) * 0.4;
-  const l = Math.max(0, Math.min(1, baseL + (t-0.5)*2*spread));
-  return hslToRgbString(h, s, l);
-}
 
-/* UI bits */
-function toggleSidebar(){
-  const b=$('#toggleSidebar');
-  document.body.classList.toggle('sidebar-collapsed');
-  b.textContent=document.body.classList.contains('sidebar-collapsed')?'→':'×';
-  setTimeout(()=>{currentCells=null;generateGrid(true);},300);
-}
-function getCanvasSize(){
-  if($('#screenSize').checked){
-    const r=$('#canvasContainer').getBoundingClientRect();
-    return{width:Math.max(1,Math.floor(r.width)),height:Math.max(1,Math.floor(r.height))};
+  if(hueRadius === 0){
+    const h = hueCenter;
+    const l = baseL;
+    return hslToRgbString(h, s, l);
   }
-  return{width:parseInt($('#canvasWidth').value||'1200',10),height:parseInt($('#canvasHeight').value||'800',10)};
-}
-function toggleScreenSize(){const on=$('#screenSize').checked;$('#manualSize').classList.toggle('disabled',on);currentCells=null;generateGrid(true);}
-function getGridMargin(){return parseInt($('#marginSlider').value||'0',10)}
-function getCellPadding(){return parseInt($('#paddingSlider').value||'0',10)}
-function updateRows(){ currentCells=null; generateGrid(true); }
-function updateDensity(){ currentCells=null; generateGrid(true); }
-function updateDoubleWidth(){ currentCells=null; generateGrid(true); }
-function updatePadding(){ redrawGrid(); }
-function updateMargin(){ currentCells=null; generateGrid(true); }
 
-/* fullscreen */
-function toggleFullscreen(){
-  const btn=$('#fullscreenBtn');
-  if(!document.fullscreenElement){
-    document.documentElement.requestFullscreen().then(()=>{btn.textContent='⛶';btn.title='Exit Fullscreen';});
-  }else{
-    document.exitFullscreen().then(()=>{btn.textContent='⛶';btn.title='Toggle Fullscreen';});
-  }
-}
-document.addEventListener('fullscreenchange',()=>{
-  const btn=$('#fullscreenBtn');
-  btn.textContent='⛶';btn.title=document.fullscreenElement?'Exit Fullscreen':'Toggle Fullscreen';
-  if($('#screenSize').checked){setTimeout(()=>{currentCells=null;generateGrid(true);},100);}
-});
-
-/* Color syncing functions - bidirectional between pickers and text inputs */
-function validateHexColor(hex){
-  const match = /^#([0-9A-Fa-f]{6})$/.exec(hex);
-  return match ? hex.toUpperCase() : null;
+  let h=(hueCenter-hueRadius)+(2*hueRadius)*t; while(h<0)h+=1; while(h>1)h-=1;
+  const l=clamp(baseL+(t-0.5)*2*spread,0,1);
+  return hslToRgbString(h,s,l);
 }
 
-// Canvas BG Color
-function syncBgColorFromPicker(){ 
-  const v=$('#bgColorPicker').value; 
-  $('#bgColorText').value=v; 
-  updateBgColor();
-}
-function syncBgColorFromText(){ 
-  const v=$('#bgColorText').value.trim();
-  const valid = validateHexColor(v);
-  if(valid){
-    $('#bgColorPicker').value=valid;
-    updateBgColor();
-  }
-}
-function updateBgColor(){
-  const v=$('#bgColorPicker').value.trim();
-  $('#canvasContainer').style.backgroundColor=v;
-  redrawGrid();
-}
+/* ==========================================================
+   Grid / layout + drawing
+========================================================== */
+let currentGridConfig=null;
+let currentCells=null;
 
-// First Letter Color
-function syncFirstFromPicker(){ 
-  const v=$('#firstLetterColorPicker').value; 
-  $('#firstLetterColorText').value=v; 
-  redrawGrid();
+function strokeWidthPx(isFirst){
+  const sync = $('#syncOtherToggle').checked;
+  const first = parseInt($('#firstThickness').value||'2',10);
+  const other = parseInt($('#otherThickness').value||'2',10);
+  return Math.max(1, isFirst ? first : (sync ? first : other));
 }
-function syncFirstFromText(){ 
-  const v=$('#firstLetterColorText').value.trim();
-  const valid = validateHexColor(v);
-  if(valid){
-    $('#firstLetterColorPicker').value=valid;
-    redrawGrid();
+function currentApplyColorTo(){
+  const el=document.querySelector('input[name="applyColor"]:checked');
+  return el?el.value:'background';
+}
+function getStrokeColor(isFirst){
+  const sync=$('#syncOtherToggle').checked;
+  if(isFirst || sync) return $('#firstLetterColorPicker').value.trim();
+  return $('#otherTextColorPicker').value.trim();
+}
+function drawBezierChar(parent,x,y,w,h,ch,isFirst,colorOverride=null){
+  if(ch===' ') return;
+  const strokeColor = colorOverride || getStrokeColor(isFirst);
+  const specs=getSpecsForChar(ch); if(!specs.length) return;
+  const BBMin={x:x,y:y,z:0}, BBMax={x:x+w,y:y+h,z:0};
+  const strokeWidth=strokeWidthPx(isFirst);
+  for(const specRaw of specs){
+    const tileType=specRaw.slice(0,2);
+    const arrayKey=specRaw.slice(2,4).trim();
+    const d1=parseInt(specRaw[4],10)||0, d2=parseInt(specRaw[5],10)||0;
+    const d3=parseInt(specRaw[6],10)||0, d4=parseInt(specRaw[7],10)||0;
+    const [pMin,pMax]=tileBoxPython(tileType,d1,d2,d3,d4,BBMin,BBMax,ch);
+    if(pMin[0]===pMax[0]&&pMin[1]===pMax[1]) continue;
+    drawBezierTileSVG(parent,pMin,pMax,arrayKey,strokeWidth,strokeColor);
   }
 }
 
-// Other Text Color
-function syncOtherFromPicker(){ 
-  const v=$('#otherTextColorPicker').value; 
-  $('#otherTextColorText').value=v; 
-  redrawGrid();
-}
-function syncOtherFromText(){ 
-  const v=$('#otherTextColorText').value.trim();
-  const valid = validateHexColor(v);
-  if(valid){
-    $('#otherTextColorPicker').value=valid;
-    redrawGrid();
+class Cell{
+  constructor(x,y,w,h,char,isFirst,type='normal',isSpace=false){
+    this.x=x|0; this.y=y|0; this.width=w|0; this.height=h|0;
+    this.char=char; this.isFirstChar=!!isFirst; this.type=type; this.isSpace=!!isSpace;
+  }
+  drawBg(bgGroup){
+    const pad=parseInt($('#paddingSlider').value||'0',10);
+    const bgX=this.x+pad, bgY=this.y+pad;
+    const bgW=this.width-pad*2, bgH=this.height-pad*2;
+    if(bgW<=0||bgH<=0) return;
+
+    const mode=document.querySelector('input[name="bgMode"]:checked')?.value||'color';
+    const applyColorTo=currentApplyColorTo();
+
+    let bgFill='#000000';
+    if(mode==='color'){
+      if(this.isSpace && $('#customSpaceColor').checked){
+        bgFill=$('#spaceColorPicker').value.trim();
+      }else{
+        bgFill=(applyColorTo==='background') ? tileBgColor(this.char) : $('#bgColorPicker').value.trim();
+      }
+    }else{
+      const canvasBg=$('#bgColorPicker').value.trim();
+      const cellBg=$('#cellBgColorPicker').value.trim();
+      bgFill=(cellBg.toLowerCase()!==canvasBg.toLowerCase())?cellBg:canvasBg;
+    }
+    const opacity=(parseInt($('#tileOpacitySlider').value||'100',10))/100;
+
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',bgX); rect.setAttribute('y',bgY);
+    rect.setAttribute('width',bgW); rect.setAttribute('height',bgH);
+    rect.setAttribute('fill',bgFill);
+    rect.setAttribute('fill-opacity',String(opacity));
+    bgGroup.appendChild(rect);
+  }
+  drawText(textGroup){
+    if(!$('#overlayText').checked) return;
+    const pad=parseInt($('#paddingSlider').value||'0',10);
+    const baseH=currentGridConfig?.bestConfig?.cellH || this.height;
+    const overlayPct=parseInt($('#overlayMarginSlider').value||'0',10);
+    const extra=Math.round(Math.max(1, baseH - 2*pad) * (overlayPct/100));
+    const px=this.x+pad+extra, py=this.y+pad+extra;
+    const pw=this.width-pad*2-extra*2, ph=this.height-pad*2-extra*2;
+    if(pw<=0||ph<=0) return;
+
+    const mode=document.querySelector('input[name="bgMode"]:checked')?.value||'color';
+    const applyColorTo=currentApplyColorTo();
+    let textColor=null;
+    if(mode==='color'&&applyColorTo==='text'){ textColor=tileBgColor(this.char); }
+    drawBezierChar(textGroup,px,py,pw,ph,this.char,this.isFirstChar,textColor);
   }
 }
 
-// Cell BG Color
-function syncCellBgFromPicker(){ 
-  const v=$('#cellBgColorPicker').value; 
-  $('#cellBgColorText').value=v; 
-  redrawGrid();
-}
-function syncCellBgFromText(){ 
-  const v=$('#cellBgColorText').value.trim();
-  const valid = validateHexColor(v);
-  if(valid){
-    $('#cellBgColorPicker').value=valid;
-    redrawGrid();
-  }
-}
+/* ---------- Basic grid layout ---------- */
+function layoutBasicBalanced(rows,innerW,innerH,size){
+  let original=($('#phraseInput').value||'')
+    .toUpperCase().replace(/[""]/g,'"').replace(/\u2014/g,'-').replace(/…/g,'...').trim();
+  const words=original.length?original.split(/\s+/):[];
+  if(words.length===0) return {cells:[],bestConfig:null};
 
-// Space Color
-function syncSpaceColorFromPicker(){ 
-  const v=$('#spaceColorPicker').value; 
-  $('#spaceColorText').value=v; 
-  redrawGrid();
-}
-function syncSpaceColorFromText(){ 
-  const v=$('#spaceColorText').value.trim();
-  const valid = validateHexColor(v);
-  if(valid){
-    $('#spaceColorPicker').value=valid;
-    redrawGrid();
-  }
-}
-
-function onOverlayToggle(){ updateOverlayUIEnabled(); redrawGrid(); }
-function updateOverlayMargin(){ redrawGrid(); }
-function updateThicknessDisplay(){ redrawGrid(); }
-
-function currentBgMode(){
-  const el=document.querySelector('input[name="bgMode"]:checked');
-  return el?el.value:'color';
-}
-function currentGridType(){
-  const el=document.querySelector('input[name="gridType"]:checked');
-  return el?el.value:'tessellated';
-}
-function updateOverlayUIEnabled(){
-  const overlay=$('#overlayText').checked;
-  const marginWrap=$('#overlayMarginRow');
-  marginWrap.classList.toggle('disabled', !overlay);
-  const disable=(!overlay);
-  ['#firstLetterColorPicker','#firstLetterColorText','#otherTextColorPicker','#otherTextColorText','#firstThickness','#otherThickness'].forEach(sel=>{
-    const el=$(sel); if(!el) return; disable?el.setAttribute('disabled','disabled'):el.removeAttribute('disabled');
-  });
-}
-function toggleSpaceControls(){
-  const showSpaceColor=$('#customSpaceColor').checked;
-  $('#spaceColorRow').style.display=showSpaceColor?'flex':'none';
-  redrawGrid();
-}
-
-function updateReplaceCharVisibility(){
-  const show=$('#replaceSpaceChar').checked;
-  $('#replaceCharRow').style.display=show?'flex':'none';
-}
-
-function updateSpaceControlsVisibility(){
   const includeSpaces=$('#includeSpaces').checked;
-  $('#spaceControls').style.display=includeSpaces?'block':'none';
+
+  const wordLens=words.map(w=>w.length);
+  const totalChars=wordLens.reduce((a,b)=>a+b,0)+(includeSpaces?Math.max(0,words.length-1):0);
+
+  const target=Math.max(1,Math.round(totalChars/rows));
+  const maxPerLine=Math.max(target,Math.floor(target*1.35));
+
+  const n=words.length, prefixLen=[0];
+  for(let i=0;i<n;i++) prefixLen[i+1]=prefixLen[i]+wordLens[i];
+  const lineLen=(i,j)=> (prefixLen[j+1]-prefixLen[i]) + (includeSpaces?(j-i):0);
+  const bad=(len,isLast)=>{
+    if(len<1||len>maxPerLine) return 1e9;
+    return isLast?Math.pow(Math.max(0,len-target),2)*0.5:Math.pow(Math.abs(len-target),2);
+  };
+
+  const dp=Array.from({length:rows+1},()=>Array(n+1).fill(1e15));
+  const prev=Array.from({length:rows+1},()=>Array(n+1).fill(-1));
+  dp[0][0]=0;
+  for(let k=1;k<=rows;k++){
+    for(let j=1;j<=n;j++){
+      for(let i=0;i<j;i++){
+        const len=lineLen(i,j-1), isLast=(k===rows&&j===n);
+        const cost=dp[k-1][i]+bad(len,isLast);
+        if(cost<dp[k][j]){ dp[k][j]=cost; prev[k][j]=i; }
+      }
+    }
+  }
+  let k=rows, j=n, splits=[];
+  while(k>0&&j>0){ const i=prev[k][j]; if(i<0){splits=[[0,n-1]];break;} splits.push([i,j-1]); j=i; k--; }
+  splits.reverse();
+
+  const lines=splits.map(([i,j])=>{
+    if(includeSpaces){
+      const spaceChar=$('#replaceSpaceChar').checked ? ($('#replaceCharText').value||'_') : ' ';
+      return words.slice(i,j+1).join(spaceChar);
+    }else{
+      return words.slice(i,j+1).join('');
+    }
+  });
+  while(lines.length<rows) lines.push('');
+
+  const longestLen=Math.max(1,...lines.map(s=>s.length));
+  const cellH=Math.max(1,Math.floor(innerH/rows));
+  const cellW=Math.max(1,Math.floor(innerW/longestLen));
+  const startY=Math.floor((size.height-rows*cellH)/2);
+
+  const cells=[];
+  for(let r=0;r<rows;r++){
+    const line=lines[r]||'';
+    const nChars=line.length;
+    if(nChars===0) continue;
+    const rowW=nChars*cellW, startX=Math.floor((size.width-rowW)/2);
+    for(let c=0;c<nChars;c++){
+      const ch=line[c];
+      const isFirst=isFirstCharInBasic(line,c);
+      const isSpace=(includeSpaces && (ch===' '||($('#replaceSpaceChar').checked && ch===($('#replaceCharText').value||'_'))));
+      const x=startX+c*cellW, y=startY+r*cellH;
+      cells.push(new Cell(x,y,cellW,cellH,ch,isFirst,'normal',isSpace));
+    }
+  }
+  return { cells, bestConfig:{rows,cols:longestLen,cellW,cellH,totalCells:cells.length} };
+}
+function isFirstCharInBasic(line,idx){
+  if(!line[idx]||line[idx]===' ') return false;
+  if(idx===0) return true;
+  return line[idx-1]===' ';
 }
 
-/* ==== Tessellated planner (unchanged) ==== */
+/* ---------- Tessellated planner ---------- */
 function largestRemainderQuotas(total,weights){
   const sum=weights.reduce((a,b)=>a+b,0)||1;
   const raw=weights.map(w=>(w/sum)*total);
@@ -676,46 +733,49 @@ function largestRemainderQuotas(total,weights){
   for(let k=0;k<order.length&&rem>0;k++,rem--) base[order[k].i]++;
   return base;
 }
-function planGrid(charData, rows, startCols=null){
+function planGrid(charData,rows,startCols=null){
   const N=charData.length;
   const safeIDs=[], unsafeIDs=[];
   charData.forEach((c,i)=>c.isFirstChar?safeIDs.push(i):unsafeIDs.push(i));
   const pairs=[]; for(let i=0;i<unsafeIDs.length-1;i++){const a=unsafeIDs[i], b=unsafeIDs[i+1]; if(b===a+1 && charData[a].wordIndex===charData[b].wordIndex) pairs.push(a);}
   const availDoubles=safeIDs.length, availDivides=pairs.length;
-  const doublePct=parseInt($('#doubleWidthSlider').value)/100, halfPct=parseInt($('#densitySlider').value)/100;
+  const doublePct=parseInt($('#doubleWidthSlider').value,10)/100, halfPct=parseInt($('#densitySlider').value,10)/100;
   const D_desired=Math.round(availDoubles*doublePct), V_desired=Math.round(availDivides*halfPct);
 
   const hintCols=startCols ?? Math.max(1, Math.round((N + D_desired - V_desired)/rows));
   let best=null;
   function feasible(cols){
     const total=rows*cols, delta=total-N;
-    if (delta>=0){ if (delta<=availDoubles) return {cols,D:delta,V:0,total}; }
-    else { const need=-delta; if (need<=availDivides) return {cols,D:0,V:need,total}; }
+    if(delta>=0){ if(delta<=availDoubles) return {cols,D:delta,V:0,total}; }
+    else{ const need=-delta; if(need<=availDivides) return {cols,D:0,V:need,total}; }
     return null;
   }
   for(let radius=0; radius<=rows*6; radius++){
     const candidates=[hintCols-radius, hintCols+radius].filter(c=>c>=1);
     for(const c of candidates){
       const p=feasible(c); if(!p) continue;
-      const jitter = rand()*0.1;
+      const jitter=rand()*0.1;
       const score=Math.abs(p.D-D_desired)+Math.abs(p.V-V_desired)+(c*0.001)+jitter;
-      if(!best || score<best.score) best={...p,score};
+      if(!best||score<best.score) best={...p,score};
     }
     if(best) break;
   }
-  if(!best){ let c=Math.max(1,hintCols); let tries=0; while(!best && tries<200){const p=feasible(c); if(p) best={...p,score:1e6}; c++; tries++;} }
+  if(!best){
+    let c=Math.max(1,hintCols), tries=0;
+    while(!best&&tries<200){const p=feasible(c); if(p) best={...p,score:1e6}; c++; tries++;}
+  }
   const cols=best.cols, totalCells=rows*cols;
   const basePerRow=Math.floor(totalCells/rows), rem=totalCells-basePerRow*rows;
-  const addOrder = rotate([...Array(rows).keys()], Math.floor(rand()*rows));
+  const addOrder=rotate([...Array(rows).keys()], Math.floor(rand()*rows));
   const targetRowCells=Array.from({length:rows},()=>basePerRow);
   for(let i=0;i<rem;i++){ targetRowCells[addOrder[i]]++; }
   let quotasD=largestRemainderQuotas(best.D,targetRowCells);
   let quotasV=largestRemainderQuotas(best.V,targetRowCells);
-  quotasD = rotate(quotasD, Math.floor(rand()*rows));
-  quotasV = rotate(quotasV, Math.floor(rand()*rows));
+  quotasD=rotate(quotasD,Math.floor(rand()*rows));
+  quotasV=rotate(quotasV,Math.floor(rand()*rows));
   return {cols,rows,totalCells,targetRowCells,quotasD,quotasV,pairs,plan:{D:best.D,V:best.V},desired:{D:D_desired,V:V_desired}};
 }
-function packRows(charData, plan){
+function packRows(charData,plan){
   const { rows, targetRowCells, quotasD, quotasV, pairs } = plan;
   const pairSet=new Set(pairs);
   const consumed=new Set();
@@ -734,31 +794,31 @@ function packRows(charData, plan){
       const canDivide=next && pairSet.has(i) && !consumed.has(i+1);
       const safeToDivide = canDivide && (globalCharsRemaining-2) >= (globalCellsRemaining-1);
 
-      if (cellsLeft>=2 && canDouble && rowD>0 && safeToDivide && rowV>0){
-        const pickDouble = (rowD/(rowD+rowV)) > rand();
-        if (pickDouble){
+      if(cellsLeft>=2 && canDouble && rowD>0 && safeToDivide && rowV>0){
+        const pickDouble=(rowD/(rowD+rowV))>rand();
+        if(pickDouble){
           placements.push({row:r,kind:'double',ids:[i]});
           consumed.add(i); i++; cellsLeft-=2; globalCellsRemaining-=2; globalCharsRemaining-=1; rowD--;
           continue;
-        } else {
+        }else{
           placements.push({row:r,kind:'divided',ids:[i,i+1]});
           consumed.add(i); consumed.add(i+1); i+=2; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=2; rowV--;
           continue;
         }
       }
-      if (cellsLeft>=2 && canDouble && rowD>0){
+      if(cellsLeft>=2 && canDouble && rowD>0){
         placements.push({row:r,kind:'double',ids:[i]});
         consumed.add(i); i++; cellsLeft-=2; globalCellsRemaining-=2; globalCharsRemaining-=1; rowD--; continue;
       }
-      if (safeToDivide && rowV>0){
+      if(safeToDivide && rowV>0){
         placements.push({row:r,kind:'divided',ids:[i,i+1]});
         consumed.add(i); consumed.add(i+1); i+=2; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=2; rowV--; continue;
       }
-      if (cellsLeft>=2 && canDouble){
+      if(cellsLeft>=2 && canDouble){
         placements.push({row:r,kind:'double',ids:[i]});
         consumed.add(i); i++; cellsLeft-=2; globalCellsRemaining-=2; globalCharsRemaining-=1; continue;
       }
-      if (safeToDivide){
+      if(safeToDivide){
         placements.push({row:r,kind:'divided',ids:[i,i+1]});
         consumed.add(i); consumed.add(i+1); i+=2; cellsLeft-=1; globalCellsRemaining-=1; globalCharsRemaining-=2; continue;
       }
@@ -770,259 +830,185 @@ function packRows(charData, plan){
   return { placements, usedChars };
 }
 
-class Cell{
-  constructor(x,y,w,h,char,isFirst,type='normal',isSpace=false){this.x=x|0;this.y=y|0;this.width=w|0;this.height=h|0;this.char=char;this.isFirstChar=!!isFirst;this.type=type;this.isSpace=!!isSpace;}
-  draw(bgGroup,textGroup){
-    const pad=getCellPadding();
-    const bgX=this.x+pad, bgY=this.y+pad;
-    const bgW=this.width-pad*2, bgH=this.height-pad*2;
-    if(bgW<=0||bgH<=0) return;
-
-    const mode=currentBgMode();
-    const overlayActive=$('#overlayText').checked;
-    const applyColorTo = currentApplyColorTo();
-
-    // background rect - SVG fill color
-    let bgFill='#000000';
-    if (mode==='color'){
-      // For spaces when custom space color is enabled, use the custom space color for background
-      if (this.isSpace && $('#customSpaceColor').checked) {
-        bgFill = $('#spaceColorPicker').value.trim();
-      } else {
-        // Use regular color system
-        if (applyColorTo==='background') {
-          bgFill = tileBgColor(this.char);
-        } else {
-          // text mode - use canvas background for tiles
-          bgFill = $('#bgColorPicker').value.trim();
-        }
-      }
-    } else if (mode==='single') {
-      const canvasBg=$('#bgColorPicker').value.trim();
-      const cellBg=$('#cellBgColorPicker').value.trim();
-      bgFill = (cellBg.toLowerCase()!==canvasBg.toLowerCase()) ? cellBg : canvasBg;
-    }
-    
-    // Get opacity value (0-1)
-    const opacity = parseInt($('#tileOpacitySlider').value || '100', 10) / 100;
-    
-    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-    rect.setAttribute('x',bgX); rect.setAttribute('y',bgY);
-    rect.setAttribute('width',bgW); rect.setAttribute('height',bgH);
-    rect.setAttribute('fill',bgFill);
-    rect.setAttribute('fill-opacity',String(opacity));
-    bgGroup.appendChild(rect);
-
-    // overlay text
-    if (overlayActive){
-      const baseH=currentGridConfig?.bestConfig?.cellH || bgH;
-      const overlayPct=parseInt($('#overlayMarginSlider').value||'0',10);
-      const extra=Math.round(Math.max(1, baseH - 2*getCellPadding()) * (overlayPct/100));
-      const px=bgX+extra, py=bgY+extra;
-      const pw=bgW-extra*2, ph=bgH-extra*2;
-      if(pw>0&&ph>0) {
-        // Determine text stroke color
-        let textColor = null;
-        if (mode==='color' && applyColorTo==='text') {
-          textColor = tileBgColor(this.char);
-        }
-        drawBezierChar(textGroup,px,py,pw,ph,this.char,this.isFirstChar,textColor);
-      }
-    }
+/* ---------- Exported sizing helpers ---------- */
+function getCanvasSize(){
+  if(EXPORT_SIZE_OVERRIDE){
+    return {width:EXPORT_SIZE_OVERRIDE.w, height:EXPORT_SIZE_OVERRIDE.h};
   }
+  if($('#screenSize').checked){
+    const r=$('#canvasContainer').getBoundingClientRect();
+    return {width:Math.max(1,Math.floor(r.width)), height:Math.max(1,Math.floor(r.height))};
+  }
+  return {width:parseInt($('#canvasWidth').value||'1200',10), height:parseInt($('#canvasHeight').value||'800',10)};
 }
 
-/* ==== BASIC grid (no grid alignment, center rows, no empty tiles, balanced) ==== */
-function layoutBasicBalanced(rows, innerW, innerH, size){
-  // Build words (no hyphenation)
-  let original = ($('#phraseInput').value || '').toUpperCase()
-    .replace(/[""]/g,'"').replace(/—/g,'-').replace(/…/g,'...').trim();
-  
-  const words = original.length ? original.split(/\s+/) : [];
-  if (words.length===0) return {cells:[],bestConfig:null};
-
-  // Check if spaces should be included based on user preference
-  const includeSpaces = $('#includeSpaces').checked;
-
-  // measure by character count (including single spaces between words if enabled)
-  const wordLens = words.map(w=>w.length);
-  const totalChars = wordLens.reduce((a,b)=>a+b,0) + (includeSpaces ? Math.max(0, words.length-1) : 0);
-
-  // target per line & per-line cap
-  const target = Math.max(1, Math.round(totalChars / rows));
-  const maxPerLine = Math.max(target, Math.floor(target*1.35)); // allow a bit longer lines
-
-  // DP: split words across up to 'rows' lines minimizing squared deviation from 'target'
-  // cost(i,j) = length of words i..j plus spaces between (j-i) if spaces are included
-  const n=words.length;
-  const prefixLen=[0];
-  for(let i=0;i<n;i++) prefixLen[i+1]=prefixLen[i]+wordLens[i];
-
-  function lineLen(i,j){ // inclusive i..j
-    const letters = prefixLen[j+1]-prefixLen[i];
-    const spaces = includeSpaces ? (j-i) : 0; // spaces only if includeSpaces is true
-    return letters + spaces;
-  }
-  function bad(len,isLast){
-    if (len<1) return 1e9;
-    if (len>maxPerLine) return 1e9;               // hard cap
-    return isLast ? Math.pow(Math.max(0,len-target),2) * 0.5   // softer penalty on last
-                  : Math.pow(Math.abs(len-target),2);
-  }
-
-  // dp[k][j] = min cost using k lines to place first j words (0..j-1)
-  const dp=Array.from({length:rows+1},()=>Array(n+1).fill(1e15));
-  const prev=Array.from({length:rows+1},()=>Array(n+1).fill(-1));
-  dp[0][0]=0;
-
-  for(let k=1;k<=rows;k++){
-    for(let j=1;j<=n;j++){
-      for(let i=0;i<j;i++){
-        const len=lineLen(i,j-1);
-        const isLast = (k===rows && j===n);
-        const cost=dp[k-1][i]+bad(len,isLast);
-        if(cost<dp[k][j]){
-          dp[k][j]=cost; prev[k][j]=i;
-        }
-      }
+/* ---------- Auto-rows estimator ---------- */
+function parseCharDataForText(text){
+  const includeSpaces=$('#includeSpaces').checked;
+  const charData=[]; let wordIndex=0, firstInWord=true;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch===' '&&!includeSpaces){ firstInWord=true; continue; }
+    if(ch===' '&&includeSpaces){
+      const displayChar=$('#replaceSpaceChar').checked ? ($('#replaceCharText').value||'_') : ' ';
+      charData.push({char:displayChar,isFirstChar:false,wordIndex,originalIndex:i,isSpace:true});
+      firstInWord=true; wordIndex++;
+    }else{
+      charData.push({char:ch,isFirstChar:firstInWord,wordIndex,originalIndex:i,isSpace:false});
+      if(firstInWord) firstInWord=false; else if(i+1<text.length && text[i+1]===' ') wordIndex++;
     }
   }
-  // backtrack the split points
-  let k=rows, j=n, splits=[];
-  while(k>0 && j>0){
-    const i=prev[k][j];
-    if(i<0){ // fallback greedy if DP failed
-      splits=[0,n]; break;
-    }
-    splits.push([i,j-1]);
-    j=i; k--;
+  return charData;
+}
+
+function evaluateTessRows(rows, charData, innerW, innerH, size){
+  let colsHint=null, success=false, tries=0, chosenCols=null;
+  while(!success&&tries<120){
+    const plan=planGrid(charData,rows,colsHint);
+    const cols=plan.cols;
+    const cellW=Math.max(1,Math.floor(innerW/cols));
+    const cellH=Math.max(1,Math.floor(innerH/rows));
+    const {placements,usedChars}=packRows(charData,plan);
+    const totalCells=rows*cols;
+    const placedCells=placements.reduce((s,p)=>s+(p.kind==='double'?2:1),0);
+    const usedAll=(usedChars===charData.length);
+    const filledAll=(placedCells===totalCells);
+    if(usedAll&&filledAll){ chosenCols=cols; success=true; break; }
+    colsHint=!filledAll ? Math.max(1,plan.cols-1) : plan.cols+1;
+    tries++;
   }
-  splits.reverse();
-
-  // build line strings (with spaces between words only if includeSpaces is true)
-  const lines = splits.map(([i,j])=>{
-    if (includeSpaces) {
-      // When spaces are included, use replacement character if specified
-      const spaceChar = $('#replaceSpaceChar').checked ? ($('#replaceCharText').value || '_') : ' ';
-      return words.slice(i,j+1).join(spaceChar);
-    } else {
-      return words.slice(i,j+1).join('');
-    }
-  });
-  // If dp used fewer lines than rows, pad with empty lines to keep vertical spacing even
-  while(lines.length<rows) lines.push('');
-
-  // sizing: uniform height per row; width sized by longest visual row
-  const longestLen = Math.max(1, ...lines.map(s=>s.length));
+  if(!success) return {score:Infinity};
+  const cols=chosenCols;
+  const cellW=Math.max(1,Math.floor(innerW/cols));
   const cellH=Math.max(1,Math.floor(innerH/rows));
-  const cellW=Math.max(1,Math.floor(innerW/longestLen));
-  const startY = Math.floor((size.height - rows*cellH)/2);
 
-  const cells=[];
-  for(let r=0;r<rows;r++){
-    const line = lines[r] || '';
-    const nChars = line.length;
-    if(nChars===0) continue; // no empty row tiles rendered
+  let score=0;
+  const ar=cellW/cellH; score+=Math.abs(Math.log(ar))*3;
+  const minDim=Math.min(cellW,cellH);
+  if(minDim<22) score+=(22-minDim)*1.4;
+  if(minDim>120) score+=(minDim-120)*0.6;
+  if(cols<6) score+=(6-cols)*0.8;
+  if(cols>40) score+=(cols-40)*0.5;
+  const ratio=cols/rows;
+  if(ratio<0.8) score+=(0.8-ratio)*10;
+  if(ratio>3.0) score+=(ratio-3.0)*10;
+  if(rows%2!==0) score+=0.15;
+  if(typeof lastAutoRows==='number') score+=Math.abs(rows-lastAutoRows)*0.02;
 
-    // center horizontally per row
-    const rowW = nChars * cellW;
-    const startX = Math.floor((size.width - rowW)/2);
+  return {score,cols,cellW,cellH};
+}
 
-    // emit exactly nChars tiles (no padding)
-    for(let c=0;c<nChars;c++){
-      const ch=line[c];
-      const isFirst=isFirstCharInBasic(line,c);
-      const isSpace = (includeSpaces && (ch === ' ' || ($('#replaceSpaceChar').checked && ch === ($('#replaceCharText').value || '_'))));
-      const x=startX + c*cellW;
-      const y=startY + r*cellH;
-      cells.push(new Cell(x,y,cellW,cellH,ch,isFirst,'normal',isSpace));
+function evaluateBasicRows(rows, innerW, innerH, size){
+  const out=layoutBasicBalanced(rows, innerW, innerH, size);
+  if(!out.bestConfig) return {score:Infinity};
+  const {cols,cellW,cellH}=out.bestConfig;
+  let score=0;
+  const ar=cellW/cellH; score+=Math.abs(Math.log(ar))*3;
+  const minDim=Math.min(cellW,cellH);
+  if(minDim<22) score+=(22-minDim)*1.4;
+  if(minDim>120) score+=(minDim-120)*0.6;
+  if(cols<6) score+=(6-cols)*0.8;
+  if(cols>40) score+=(cols-40)*0.5;
+  const ratio=cols/rows;
+  if(ratio<0.8) score+=(0.8-ratio)*10;
+  if(ratio>3.0) score+=(ratio-3.0)*10;
+  if(rows%2!==0) score+=0.15;
+  if(typeof lastAutoRows==='number') score+=Math.abs(rows-lastAutoRows)*0.02;
+
+  return {score,cols,cellW,cellH};
+}
+
+function pickBestRowsForCurrentText(){
+  const rawText=($('#phraseInput').value || DEFAULT_QUOTE)
+    .toUpperCase().replace(/[""]/g,'"').replace(/\u2014/g,'-').replace(/…/g,'...');
+  const size=getCanvasSize();
+  const margin=parseInt($('#marginSlider').value||'0',10);
+  const innerW=Math.max(1,size.width - margin*2), innerH=Math.max(1,size.height - margin*2);
+
+  const gridType=document.querySelector('input[name="gridType"]:checked')?.value||'tessellated';
+
+  let best={rows:parseInt($('#rowSlider').value,10)||15, score:Infinity};
+  const RMIN=1, RMAX=50;
+
+  if(gridType==='tessellated'){
+    const charData=parseCharDataForText(rawText);
+    if(charData.length===0) return best.rows;
+    for(let r=RMIN;r<=RMAX;r++){
+      const e=evaluateTessRows(r,charData,innerW,innerH,size);
+      if(e.score<best.score){ best={rows:r,score:e.score}; }
+    }
+  }else{ // basic
+    for(let r=RMIN;r<=RMAX;r++){
+      const e=evaluateBasicRows(r,innerW,innerH,size);
+      if(e.score<best.score){ best={rows:r,score:e.score}; }
     }
   }
-
-  return {
-    cells,
-    bestConfig:{rows,cols:longestLen,cellW,cellH,totalCells:cells.length}
-  };
-}
-function isFirstCharInBasic(line, idx){
-  if (!line[idx] || line[idx]===' ') return false;
-  if (idx===0) return true;
-  return line[idx-1]===' ';
+  return best.rows;
 }
 
-/* ==== main render ==== */
-function generateGrid(newRandom=false){
+/* ---------- Render pipeline ---------- */
+function generateGrid(newRandom=false, startNonceOverride=null){
   try{
-    if (newRandom) runNonce=Math.random();
-    const stage=document.getElementById('stage'); stage.innerHTML='';
+    if(newRandom) runNonce=Math.random();
+    if(startNonceOverride!=null) runNonce=startNonceOverride;
+    const seedAtStart = runNonce;
 
-    const rawText=(document.getElementById('phraseInput').value || `Here's to the crazy ones, the misfits, the rebels, the troublemakers, the round pegs in the square holes... the ones who see things differently - they're not fond of rules... You can quote them, disagree with them, glorify or vilify them, but the only thing you can't do is ignore them because they change things... they push the human race forward, and while some may see them as the crazy ones, we see genius, because the ones who are crazy enough to think that they can change the world, are the ones who do. - Steve Jobs, 1997`)
-      .toUpperCase().replace(/[""]/g,'"').replace(/—/g,'-').replace(/…/g,'...');
+    const stage=$('#stage'); stage.innerHTML='';
+
+    const rawText=($('#phraseInput').value || DEFAULT_QUOTE)
+      .toUpperCase().replace(/[""]/g,'"').replace(/\u2014/g,'-').replace(/…/g,'...');
     if(!rawText.trim()) return;
 
     const size=getCanvasSize();
-    const margin=document.getElementById('screenSize').checked?getGridMargin():0;
-    const innerW=Math.max(1,size.width-margin*2), innerH=Math.max(1,size.height-margin*2);
+    const margin = parseInt($('#marginSlider').value||'0',10);
+
+    const innerW=Math.max(1,size.width - margin*2), innerH=Math.max(1,size.height - margin*2);
     stage.setAttribute('viewBox',`0 0 ${size.width} ${size.height}`);
 
-    const gridType=currentGridType();
-
-    // Build charData for tessellated only; Basic uses its own line builder
+    const gridType=document.querySelector('input[name="gridType"]:checked')?.value||'tessellated';
     let currentOutput=null;
 
-    if (gridType==='basic'){
-      currentOutput = layoutBasicBalanced(parseInt($('#rowSlider').value,10), innerW, innerH, size);
-    } else {
-      const includeSpaces=$('#includeSpaces').checked;
-      let text=rawText;
-      
-      const charData=[]; let wordIndex=0, firstInWord=true;
-      for(let i=0;i<text.length;i++){
-        const ch=text[i];
-        if(ch===' '&&!includeSpaces){ firstInWord=true; continue; }
-        if(ch===' '&&includeSpaces){ 
-          // When include spaces is on, render space as a tile (either as space or replaced character)
-          const displayChar = $('#replaceSpaceChar').checked ? ($('#replaceCharText').value || '_') : ' ';
-          charData.push({char:displayChar,isFirstChar:false,wordIndex,originalIndex:i,isSpace:true}); 
-          firstInWord=true; wordIndex++; 
-        }
-        else { charData.push({char:ch,isFirstChar:firstInWord,wordIndex,originalIndex:i,isSpace:false}); if(firstInWord) firstInWord=false; else if(i+1<text.length && text[i+1]===' ') wordIndex++; }
-      }
+    if(gridType==='basic'){
+      currentOutput=layoutBasicBalanced(parseInt($('#rowSlider').value,10), innerW, innerH, size);
+    }else{
+      const text=rawText;
+      const charData=parseCharDataForText(text);
       if(!charData.length) return;
 
       const rows=parseInt($('#rowSlider').value,10);
       let colsHint=null, success=false, tries=0;
-      while(!success && tries<120){
-        const plan=planGrid(charData, rows, colsHint);
+      while(!success&&tries<120){
+        const plan=planGrid(charData,rows,colsHint);
         const cols=plan.cols;
         const cellW=Math.max(1,Math.floor(innerW/cols));
         const cellH=Math.max(1,Math.floor(innerH/rows));
         const gridW=cols*cellW, gridH=rows*cellH;
-        const startX=Math.floor((size.width-gridW)/2);
-        const startY=Math.floor((size.height-gridH)/2);
 
-        const {placements, usedChars}=packRows(charData, plan);
+        const startX=margin+Math.floor((size.width - margin*2 - gridW)/2);
+        const startY=margin+Math.floor((size.height - margin*2 - gridH)/2);
+
+        const {placements,usedChars}=packRows(charData,plan);
         const totalCells=rows*cols;
         const placedCells=placements.reduce((s,p)=>s+(p.kind==='double'?2:1),0);
         const usedAll=(usedChars===charData.length);
         const filledAll=(placedCells===totalCells);
 
-        if(usedAll && filledAll){
+        if(usedAll&&filledAll){
           const cells=[]; let colIndexPerRow=Array(rows).fill(0);
           for(const p of placements){
             const r=p.row, c=colIndexPerRow[r];
-            const x=startX + c*cellW, y=startY + r*cellH;
-            if (p.kind==='double'){
+            const x=startX+c*cellW, y=startY+r*cellH;
+            if(p.kind==='double'){
               const c0=charData[p.ids[0]];
               cells.push(new Cell(x,y,cellW*2,cellH,c0.char,c0.isFirstChar,'double',c0.isSpace));
               colIndexPerRow[r]+=2;
-            } else if (p.kind==='divided'){
+            }else if(p.kind==='divided'){
               const h1=Math.floor(cellH/2), h2=cellH-h1;
               const cA=charData[p.ids[0]], cB=charData[p.ids[1]];
               cells.push(new Cell(x,y,cellW,h1,cA.char,cA.isFirstChar,'split',cA.isSpace));
               cells.push(new Cell(x,y+h1,cellW,h2,cB.char,cB.isFirstChar,'split',cB.isSpace));
               colIndexPerRow[r]+=1;
-            } else {
+            }else{
               const c0=charData[p.ids[0]];
               cells.push(new Cell(x,y,cellW,cellH,c0.char,c0.isFirstChar,'normal',c0.isSpace));
               colIndexPerRow[r]+=1;
@@ -1030,19 +1016,19 @@ function generateGrid(newRandom=false){
           }
           currentOutput={cells, bestConfig:{rows,cols,cellW,cellH,totalCells}};
           success=true;
-        } else {
-          colsHint = !filledAll ? Math.max(1, plan.cols - 1) : plan.cols + 1;
+        }else{
+          colsHint=!filledAll ? Math.max(1,plan.cols-1) : plan.cols+1;
           tries++;
         }
       }
     }
 
-    if(!currentOutput || !currentOutput.cells.length) {
-      // Main canvas background even if nothing else
+    const bgColor=$('#bgColorPicker').value.trim();
+    if(!currentOutput || !currentOutput.cells.length){
       const bgOnly=document.createElementNS('http://www.w3.org/2000/svg','rect');
       bgOnly.setAttribute('x','0'); bgOnly.setAttribute('y','0');
       bgOnly.setAttribute('width',String(size.width)); bgOnly.setAttribute('height',String(size.height));
-      bgOnly.setAttribute('fill',$('#bgColorPicker').value.trim());
+      bgOnly.setAttribute('fill',bgColor);
       stage.appendChild(bgOnly);
       return;
     }
@@ -1050,46 +1036,108 @@ function generateGrid(newRandom=false){
     currentGridConfig={ bestConfig: currentOutput.bestConfig };
     currentCells=currentOutput.cells;
 
-    // Main canvas background
+    // Background
     const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
     bg.setAttribute('x','0'); bg.setAttribute('y','0');
     bg.setAttribute('width',String(size.width)); bg.setAttribute('height',String(size.height));
-    bg.setAttribute('fill',$('#bgColorPicker').value.trim());
+    bg.setAttribute('fill',bgColor);
     stage.appendChild(bg);
 
-    // Tile backgrounds group (lower than text)
+    // Groups
     const gBg=document.createElementNS('http://www.w3.org/2000/svg','g'); gBg.setAttribute('id','bgTiles'); stage.appendChild(gBg);
-    // Text group (highest)
     const gText=document.createElementNS('http://www.w3.org/2000/svg','g'); gText.setAttribute('id','textTiles'); stage.appendChild(gText);
+    const txtOpacity=(parseInt($('#textOpacitySlider').value||'100',10))/100;
+    gText.setAttribute('opacity', String(txtOpacity));
 
-    for(const cell of currentOutput.cells) cell.draw(gBg,gText);
+    // Draw bg tiles
+    for(const cell of currentOutput.cells) cell.drawBg(gBg);
 
+    // Draw text tiles: other first, initial last (higher z)
+    for(const cell of currentOutput.cells){ if(!cell.isFirstChar) cell.drawText(gText); }
+    for(const cell of currentOutput.cells){ if( cell.isFirstChar) cell.drawText(gText); }
+
+    lastRunSeed = seedAtStart;
+
+  }catch(err){ console.error(err); }
+}
+const redrawGrid = debounce(()=>generateGrid(false, lastRunSeed), 0);
+
+/* ==========================================================
+   Save / copy helpers with size selection
+========================================================== */
+function flashButton(sel){
+  const btn=$(sel); if(!btn) return;
+  const old=btn.style.boxShadow;
+  btn.style.boxShadow='0 0 0 3px rgba(23,162,184,.7)';
+  setTimeout(()=>btn.style.boxShadow=old,350);
+}
+function buildSerializedSvg(w,h){
+  const original=$('#stage');
+  const clone=original.cloneNode(true);
+  clone.removeAttribute('style');
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(w));
+  clone.setAttribute('height', String(h));
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(clone);
+}
+async function exportSVG(mode){
+  const restore = ()=>{ EXPORT_SIZE_OVERRIDE=null; generateGrid(false, lastRunSeed); };
+  try{
+    if(mode==='current'){
+      const stage=$('#stage');
+      const vb=(stage.getAttribute('viewBox')||'0 0 1024 768').trim().split(/\s+/).map(Number);
+      const w=Math.max(1, Math.round(vb[2]||stage.clientWidth||1024));
+      const h=Math.max(1, Math.round(vb[3]||stage.clientHeight||768));
+      const xml=buildSerializedSvg(w,h);
+      const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='tessellation.svg';
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},0);
+    }else{
+      const cssW = (window.screen && window.screen.width) ? window.screen.width : window.innerWidth;
+      const cssH = (window.screen && window.screen.height) ? window.screen.height : window.innerHeight;
+      const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
+      const w = Math.max(1, cssW * dpr);
+      const h = Math.max(1, cssH * dpr);
+      EXPORT_SIZE_OVERRIDE = {w,h};
+      generateGrid(false, lastRunSeed);
+      const xml=buildSerializedSvg(w,h);
+      const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='tessellation-screen.svg';
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},0);
+    }
   }catch(err){
     console.error(err);
+    alert('Saving SVG failed.');
+  }finally{
+    restore();
   }
 }
-function redrawGrid(){ generateGrid(false); }
-
-/* save/copy */
-function saveSVG(){
-  const svg=document.getElementById('stage');
-  svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  const xml=new XMLSerializer().serializeToString(svg);
-  const blob=new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n',xml],{type:'image/svg+xml;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='tessellation.svg';
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},0);
-}
-async function copySVG(){
-  const svg=document.getElementById('stage');
-  svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  const xml='<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg);
-
+async function exportCopy(mode){
+  const restore = ()=>{ EXPORT_SIZE_OVERRIDE=null; generateGrid(false, lastRunSeed); };
   try{
-    if (navigator.clipboard && navigator.clipboard.writeText){
+    let w,h;
+    if(mode==='current'){
+      const stage=$('#stage');
+      const vb=(stage.getAttribute('viewBox')||'0 0 1024 768').trim().split(/\s+/).map(Number);
+      w=Math.max(1, Math.round(vb[2]||stage.clientWidth||1024));
+      h=Math.max(1, Math.round(vb[3]||stage.clientHeight||768));
+    }else{
+      const cssW = (window.screen && window.screen.width) ? window.screen.width : window.innerWidth;
+      const cssH = (window.screen && window.screen.height) ? window.screen.height : window.innerHeight;
+      const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
+      w = Math.max(1, cssW * dpr);
+      h = Math.max(1, cssH * dpr);
+      EXPORT_SIZE_OVERRIDE = {w,h};
+      generateGrid(false, lastRunSeed);
+    }
+    const xml=buildSerializedSvg(w,h);
+    if(navigator.clipboard && navigator.clipboard.writeText){
       await navigator.clipboard.writeText(xml);
-    } else {
+    }else{
       const ta=document.createElement('textarea');
       ta.value=xml; ta.style.position='fixed'; ta.style.opacity='0'; ta.style.pointerEvents='none';
       document.body.appendChild(ta); ta.focus(); ta.select();
@@ -1097,100 +1145,366 @@ async function copySVG(){
     }
     flashButton('#copyBtn');
   }catch(err){
-    console.error('Clipboard copy failed:', err);
-    alert('Copy failed. Your browser may block clipboard access outside HTTPS.');
+    console.error(err);
+    alert('Copy failed.');
+  }finally{
+    restore();
   }
-}
-function flashButton(sel){
-  const btn=$(sel); if(!btn) return;
-  const old=btn.style.boxShadow;
-  btn.style.boxShadow='0 0 0 3px rgba(23,162,184,.7)';
-  setTimeout(()=>btn.style.boxShadow=old,350);
 }
 
-/* Play */
-function regenerate(){
-  const gridType=currentGridType();
-  if (gridType==='tessellated'){
-    const r=()=>Math.round(10 + rand()*80);
-    $('#densitySlider').value = r();
-    $('#doubleWidthSlider').value = r();
+/* ---------- PNG export ---------- */
+function svgToPng(w,h, filename='tessellation.png'){
+  return new Promise((resolve,reject)=>{
+    const xml=buildSerializedSvg(w,h);
+    const svgBlob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+    const url=URL.createObjectURL(svgBlob);
+
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,w,h);
+
+        if(canvas.toBlob){
+          canvas.toBlob(blob=>{
+            const pngUrl=URL.createObjectURL(blob);
+            const a=document.createElement('a');
+            a.href=pngUrl; a.download=filename;
+            document.body.appendChild(a); a.click();
+            setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(pngUrl); URL.revokeObjectURL(url); resolve();},0);
+          },'image/png');
+        }else{
+          const dataURL=canvas.toDataURL('image/png');
+          const a=document.createElement('a');
+          a.href=dataURL; a.download=filename;
+          document.body.appendChild(a); a.click();
+          setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url); resolve();},0);
+        }
+      }catch(e){ URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('SVG to PNG conversion failed')); };
+    img.src=url;
+  });
+}
+async function exportPNG(mode){
+  const restore = ()=>{ EXPORT_SIZE_OVERRIDE=null; generateGrid(false, lastRunSeed); };
+  try{
+    if(mode==='current'){
+      const stage=$('#stage');
+      const vb=(stage.getAttribute('viewBox')||'0 0 1024 768').trim().split(/\s+/).map(Number);
+      const w=Math.max(1, Math.round(vb[2]||stage.clientWidth||1024));
+      const h=Math.max(1, Math.round(vb[3]||stage.clientHeight||768));
+      await svgToPng(w,h,'tessellation.png');
+    }else{
+      const cssW = (window.screen && window.screen.width) ? window.screen.width : window.innerWidth;
+      const cssH = (window.screen && window.screen.height) ? window.screen.height : window.innerHeight;
+      const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
+      const w = Math.max(1, cssW * dpr);
+      const h = Math.max(1, cssH * dpr);
+      EXPORT_SIZE_OVERRIDE = {w,h};
+      generateGrid(false, lastRunSeed);
+      await svgToPng(w,h,'tessellation-screen.png');
+    }
+  }catch(err){
+    console.error(err);
+    alert('Saving image failed.');
+  }finally{
+    restore();
   }
+}
+
+/* ---------- Modals ---------- */
+function openModal(el){ el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
+function closeModal(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+
+/* ==========================================================
+   Fullscreen UI auto-hide (only when sidebar is hidden)
+========================================================== */
+let uiHideTimer=null;
+function shouldAutoHideUI(){ return !!document.fullscreenElement && document.body.classList.contains('sidebar-collapsed'); }
+function showUI(){ document.body.classList.remove('fullscreen-ui-hidden'); }
+function scheduleHideUI(){
+  clearTimeout(uiHideTimer);
+  if(shouldAutoHideUI()){
+    uiHideTimer=setTimeout(()=>{ document.body.classList.add('fullscreen-ui-hidden'); }, 3000);
+  }else{
+    showUI();
+  }
+}
+function pokeUI(){ showUI(); scheduleHideUI(); }
+function bindInteractionWake(){ ['mousemove','mousedown','keydown','touchstart','pointerdown'].forEach(ev=>{ document.addEventListener(ev, pokeUI, {passive:true}); }); }
+
+/* ==========================================================
+   Manual size centering using #artboard
+========================================================== */
+function applyCanvasSizingUI(){
+  const stage=$('#stage');
+  const art=$('#artboard');
+  if($('#screenSize').checked){
+    art.style.width='100%';
+    art.style.height='100%';
+    stage.style.width='100%';
+    stage.style.height='100%';
+    $('#canvasContainer').style.backgroundColor = $('#bgColorPicker').value.trim();
+  }else{
+    const w = parseInt($('#canvasWidth').value||'1200',10);
+    const h = parseInt($('#canvasHeight').value||'800',10);
+    art.style.width = w+'px';
+    art.style.height = h+'px';
+    stage.style.width='100%';
+    stage.style.height='100%';
+    $('#canvasContainer').style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--app-bg') || '#1a1a1a';
+  }
+}
+
+/* ==========================================================
+   First Render: robust
+========================================================== */
+let firstDrawDone = false;
+function tryRenderNow(){
+  if(firstDrawDone) return;
   currentCells=null;
   generateGrid(true);
+  const hasTiles = !!$('#textTiles') || !!$('#bgTiles');
+  if(hasTiles) firstDrawDone = true;
+}
+function setupFirstRenderWatchers(){
+  const container = $('#canvasContainer');
+  if(window.ResizeObserver && container){
+    const ro = new ResizeObserver(entries=>{
+      for(const e of entries){
+        const cr = e.contentRect;
+        if(cr.width>0 && cr.height>0){
+          tryRenderNow();
+        }
+      }
+    });
+    ro.observe(container);
+  }
+  let attempts = 0;
+  const tick = () => {
+    if(firstDrawDone || attempts>20) return;
+    attempts++;
+    tryRenderNow();
+    setTimeout(tick, 75);
+  };
+  setTimeout(tick, 0);
+
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(()=>tryRenderNow());
+  }
+  if('requestIdleCallback' in window){
+    requestIdleCallback(()=>tryRenderNow(), {timeout:200});
+  }else{
+    setTimeout(()=>tryRenderNow(), 200);
+  }
 }
 
-/* Color sliders */
-function updateColorRange(){ redrawGrid(); }
-function updateSaturation(){ redrawGrid(); }
-function updateContrast(){ redrawGrid(); }
-function updateBrightness(){ redrawGrid(); }
-function updateTileOpacity(){ redrawGrid(); }
+/* ==========================================================
+   UI wiring
+========================================================== */
+const DEFAULT_QUOTE = `Here's to the crazy ones, the misfits, the rebels, the troublemakers, the round pegs in the square holes... the ones who see things differently - they're not fond of rules... You can quote them, disagree with them, glorify or vilify them, but the only thing you can't do is ignore them because they change things... they push the human race forward, and while some may see them as the crazy ones, we see genius, because the ones who are crazy enough to think that they can change the world, are the ones who do. - Steve Jobs, 1997`;
 
-/* wire-up */
-window.onload=()=>{
-  // bg mode switch
-  document.querySelectorAll('input[name="bgMode"]').forEach(el=>{
-    el.addEventListener('change',()=>{
-      const mode=currentBgMode();
-      document.getElementById('singleControls').style.display = mode==='single' ? 'block' : 'none';
-      document.getElementById('colorControls').style.display  = mode==='color'  ? 'block' : 'none';
-      if(mode==='color'){ $('#overlayText').checked=true; }
-      updateOverlayUIEnabled(); toggleSpaceControls(); currentCells=null; generateGrid(true);
-    });
+function toggleSidebar(){
+  const b=$('#toggleSidebar');
+  document.body.classList.toggle('sidebar-collapsed');
+  b.textContent=document.body.classList.contains('sidebar-collapsed')?'→':'×';
+  setTimeout(()=>{currentCells=null;generateGrid(true); scheduleHideUI();},300);
+}
+function toggleFullscreen(){
+  const btn=$('#fullscreenBtn');
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().then(()=>{btn.title='Exit Fullscreen';});
+  }else{
+    document.exitFullscreen().then(()=>{btn.title='Toggle Fullscreen';});
+  }
+}
+function updateOverlayUIEnabled(){
+  const overlay=$('#overlayText').checked;
+  $('#overlayMarginRow').classList.toggle('disabled', !overlay);
+  ['#firstLetterColorPicker','#firstLetterColorText','#firstThickness',
+   '#otherTextColorPicker','#otherTextColorText','#otherThickness',
+   '#textOpacitySlider','#syncOtherToggle']
+    .forEach(sel=>{const el=$(sel); if(!el)return; (!overlay)?el.setAttribute('disabled','disabled'):el.removeAttribute('disabled');});
+  updateOtherControlsState();
+}
+function updateOtherControlsState(){
+  const overlay=$('#overlayText').checked;
+  const sync=$('#syncOtherToggle').checked;
+  const disable = !overlay || sync;
+  ['#otherTextColorPicker','#otherTextColorText','#otherThickness'].forEach(sel=>{
+    const el=$(sel); if(!el) return;
+    if(disable) el.setAttribute('disabled','disabled'); else el.removeAttribute('disabled');
+  });
+}
+function syncOtherFromInitial(){
+  const color=$('#firstLetterColorPicker').value;
+  $('#otherTextColorPicker').value=color;
+  $('#otherTextColorText').value=color;
+  $('#otherThickness').value=$('#firstThickness').value;
+}
+function toggleSpaceControls(){
+  const showSpaceColor=$('#customSpaceColor').checked;
+  $('#spaceColorRow').style.display=showSpaceColor?'flex':'none';
+}
+function updateReplaceCharVisibility(){ $('#replaceCharRow').style.display=$('#replaceSpaceChar').checked?'flex':'none'; }
+function updateSpaceControlsVisibility(){ const inc=$('#includeSpaces').checked; $('#spaceControls').style.display=inc?'block':'none'; }
+function bindHexPair(pickerSel,textSel,onChange){
+  on($(pickerSel),'input',()=>{ const v=$(pickerSel).value; $(textSel).value=v; onChange(); });
+  on($(textSel),'input',()=>{ const valid=validateHexColor($(textSel).value.trim()); if(valid){ $(pickerSel).value=valid; onChange(); } });
+}
+
+/* -------- Auto-rows hooks -------- */
+const autoPickRowsAndRedraw = debounce(()=>{
+  if(!$('#autoRows').checked) { currentCells=null; generateGrid(false); return; }
+  const best = pickBestRowsForCurrentText();
+  const current = parseInt($('#rowSlider').value,10)||15;
+  if(best!==current){ $('#rowSlider').value = best; }
+  lastAutoRows = best;
+  currentCells=null;
+  generateGrid(true);
+}, 120);
+
+/* Init */
+window.addEventListener('load',()=>{
+  // Seed textarea before renders
+  const ta=$('#phraseInput');
+  ta.value = DEFAULT_QUOTE;
+
+  // Buttons
+  on($('#toggleSidebar'),'click',toggleSidebar);
+  on($('#regen'),'click',()=>{ if((document.querySelector('input[name="gridType"]:checked')?.value||'tessellated')==='tessellated'){ const r=()=>Math.round(10+rand()*80); $('#densitySlider').value=r(); $('#doubleWidthSlider').value=r(); } currentCells=null; generateGrid(true); });
+  on($('#saveBtn'),'click',()=>openModal($('#saveSvgModal')));
+  on($('#copyBtn'),'click',()=>openModal($('#copySvgModal')));
+  on($('#saveImageBtn'),'click',()=>openModal($('#saveImageModal')));
+
+  // Modals
+  on($('#exportCancelBtn'),'click',()=>closeModal($('#saveImageModal')));
+  on($('#saveImageModal'),'click',(e)=>{ if(e.target===e.currentTarget) closeModal($('#saveImageModal')); });
+  on($('#exportCurrentBtn'),'click',()=>{ closeModal($('#saveImageModal')); exportPNG('current'); });
+  on($('#exportScreenBtn'),'click',()=>{ closeModal($('#saveImageModal')); exportPNG('screen'); });
+
+  on($('#svgCancelBtn'),'click',()=>closeModal($('#saveSvgModal')));
+  on($('#saveSvgModal'),'click',(e)=>{ if(e.target===e.currentTarget) closeModal($('#saveSvgModal')); });
+  on($('#svgCurrentBtn'),'click',()=>{ closeModal($('#saveSvgModal')); exportSVG('current'); });
+  on($('#svgScreenBtn'),'click',()=>{ closeModal($('#saveSvgModal')); exportSVG('screen'); });
+
+  on($('#copyCancelBtn'),'click',()=>closeModal($('#copySvgModal')));
+  on($('#copySvgModal'),'click',(e)=>{ if(e.target===e.currentTarget) closeModal($('#copySvgModal')); });
+  on($('#copyCurrentBtn'),'click',()=>{ closeModal($('#copySvgModal')); exportCopy('current'); });
+  on($('#copyScreenBtn'),'click',()=>{ closeModal($('#copySvgModal')); exportCopy('screen'); });
+
+  on($('#fullscreenBtn'),'click',toggleFullscreen);
+
+  // Canvas size
+  on($('#screenSize'),'change',()=>{
+    $('#manualSize').classList.toggle('disabled',$('#screenSize').checked);
+    applyCanvasSizingUI();
+    currentCells=null; generateGrid(true);
+  });
+  on($('#canvasWidth'),'change',()=>{ applyCanvasSizingUI(); currentCells=null;generateGrid(true);});
+  on($('#canvasHeight'),'change',()=>{ applyCanvasSizingUI(); currentCells=null;generateGrid(true);});
+
+  // Grid controls
+  on($('#rowSlider'),'input',()=>{ $('#autoRows').checked=false; currentCells=null; generateGrid(true); });
+  on($('#autoRows'),'change',()=>{ if($('#autoRows').checked){ autoPickRowsAndRedraw(); } });
+  on($('#rowSlider'),'change',()=>{ lastAutoRows=parseInt($('#rowSlider').value,10)||15; });
+
+  on($('#densitySlider'),'input',()=>{ currentCells=null; generateGrid(true); });
+  on($('#doubleWidthSlider'),'input',()=>{ currentCells=null; generateGrid(true); });
+
+  on($('#paddingSlider'),'input',redrawGrid);
+  on($('#marginSlider'),'input',()=>{ currentCells=null; generateGrid(true); });
+
+  // Mode switches
+  $$('input[name="bgMode"]').forEach(el=>on(el,'change',()=>{
+    const mode=document.querySelector('input[name="bgMode"]:checked')?.value||'color';
+    $('#singleControls').style.display=mode==='single'?'block':'none';
+    $('#colorControls').style.display =mode==='color' ?'block':'none';
+    if(mode==='color'){ $('#overlayText').checked=true; }
+    updateOverlayUIEnabled(); toggleSpaceControls();
+    if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { currentCells=null; generateGrid(true); }
+  }));
+  $$('input[name="applyColor"]').forEach(el=>on(el,'change',()=>{ currentCells=null; generateGrid(true); }));
+  $$('input[name="gridType"]').forEach(el=>on(el,'change',()=>{
+    const gt=document.querySelector('input[name="gridType"]:checked')?.value||'tessellated';
+    $('#tessControls').style.display=(gt==='tessellated')?'block':'none';
+    if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { currentCells=null; generateGrid(true); }
+  }));
+
+  // Space controls
+  on($('#includeSpaces'),'change',()=>{ updateSpaceControlsVisibility(); if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { currentCells=null; generateGrid(true); }});
+  on($('#customSpaceColor'),'change',()=>{ toggleSpaceControls(); redrawGrid(); });
+  on($('#replaceSpaceChar'),'change',()=>{ updateReplaceCharVisibility(); if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { redrawGrid(); } });
+  on($('#replaceCharText'),'input',()=>{ if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { redrawGrid(); } });
+
+  // Overlay + thickness + margins + text opacity
+  on($('#overlayText'),'change',()=>{ updateOverlayUIEnabled(); redrawGrid(); });
+  on($('#overlayMarginSlider'),'input',redrawGrid);
+  on($('#textOpacitySlider'),'input',redrawGrid);
+  on($('#firstThickness'),'input',()=>{ if($('#syncOtherToggle').checked){ syncOtherFromInitial(); } redrawGrid(); });
+  on($('#otherThickness'),'input',redrawGrid);
+
+  // Sync toggle for Other Characters
+  on($('#syncOtherToggle'),'change',()=>{
+    updateOtherControlsState();
+    if($('#syncOtherToggle').checked){ syncOtherFromInitial(); }
+    redrawGrid();
   });
 
-  // apply color to switch
-  document.querySelectorAll('input[name="applyColor"]').forEach(el=>{
-    el.addEventListener('change',()=>{
-      currentCells=null; generateGrid(true);
-    });
+  // Color hex bindings
+  bindHexPair('#bgColorPicker','#bgColorText',()=>{ applyCanvasSizingUI(); redrawGrid(); });
+  bindHexPair('#firstLetterColorPicker','#firstLetterColorText',()=>{ if($('#syncOtherToggle').checked){ syncOtherFromInitial(); } redrawGrid(); });
+  bindHexPair('#otherTextColorPicker','#otherTextColorText',redrawGrid);
+  bindHexPair('#cellBgColorPicker','#cellBgColorText',redrawGrid);
+  bindHexPair('#spaceColorPicker','#spaceColorText',redrawGrid);
+
+  // Other color sliders
+  on($('#hueCenter'),'input',redrawGrid);
+  on($('#hueRadius'),'input',redrawGrid);
+  on($('#saturationSlider'),'input',redrawGrid);
+  on($('#contrastSlider'),'input',redrawGrid);
+  on($('#brightnessSlider'),'input',redrawGrid);
+  on($('#tileOpacitySlider'),'input',redrawGrid);
+
+  // Textarea typing -> auto rows
+  on(ta,'input',autoPickRowsAndRedraw);
+  on(ta,'keydown',(e)=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('#regen').click(); } });
+
+  // Window events
+  on(window,'resize',debounce(()=>{ if($('#screenSize').checked){ applyCanvasSizingUI(); if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { currentCells=null; generateGrid(true); } }},100));
+  on(document,'fullscreenchange',()=>{
+    $('#fullscreenBtn').title=document.fullscreenElement?'Exit Fullscreen':'Toggle Fullscreen';
+    if($('#screenSize').checked){ setTimeout(()=>{ if($('#autoRows').checked){ autoPickRowsAndRedraw(); } else { currentCells=null; generateGrid(true); } },100); }
+    if(document.fullscreenElement){
+      showUI();
+      scheduleHideUI();
+    }else{
+      showUI();
+      clearTimeout(uiHideTimer);
+    }
+  });
+  on(document,'keydown',(e)=>{
+    if(e.code==='Space' && !e.target.matches('input,textarea')){ e.preventDefault(); $('#regen').click(); }
+    if(e.code==='Escape'){ toggleSidebar(); }
   });
 
-  // grid type switch
-  document.querySelectorAll('input[name="gridType"]').forEach(el=>{
-    el.addEventListener('change',()=>{
-      const gt=currentGridType();
-      // show/hide tessellated-only controls
-      $('#tessControls').style.display = (gt==='tessellated') ? 'block':'none';
-      currentCells=null; generateGrid(true);
-    });
-  });
+  bindInteractionWake();
 
-  document.getElementById('customSpaceColor').addEventListener('change', toggleSpaceControls);
-  document.getElementById('replaceSpaceChar').addEventListener('change', updateReplaceCharVisibility);
-  document.getElementById('canvasWidth').addEventListener('change', ()=>{currentCells=null;generateGrid(true);});
-  document.getElementById('canvasHeight').addEventListener('change', ()=>{currentCells=null;generateGrid(true);});
-
-  updateRows(); updateDensity(); updateDoubleWidth(); updatePadding(); updateMargin();
-  updateThicknessDisplay(); updateOverlayUIEnabled();
-  
-  // Initialize color values
-  $('#bgColorPicker').value='#000000';
-  $('#bgColorText').value='#000000';
-  $('#firstLetterColorPicker').value='#ffffff';
-  $('#firstLetterColorText').value='#ffffff';
-  $('#otherTextColorPicker').value='#bfbfbf';
-  $('#otherTextColorText').value='#bfbfbf';
-  $('#cellBgColorPicker').value='#000000';
-  $('#cellBgColorText').value='#000000';
-  $('#spaceColorPicker').value='#404040';
-  $('#spaceColorText').value='#404040';
-
-  $('#canvasContainer').style.backgroundColor='#000000';
-
-  const ta=document.getElementById('phraseInput');
-  ta.value = `Here's to the crazy ones, the misfits, the rebels, the troublemakers, the round pegs in the square holes... the ones who see things differently - they're not fond of rules... You can quote them, disagree with them, glorify or vilify them, but the only thing you can't do is ignore them because they change things... they push the human race forward, and while some may see them as the crazy ones, we see genius, because the ones who are crazy enough to think that they can change the world, are the ones who do. - Steve Jobs, 1997`;
-  ta.addEventListener('keydown',(e)=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault(); regenerate();} });
-
-  // default UI visibility
+  // Initial UI state
   $('#tessControls').style.display='block';
   updateReplaceCharVisibility();
+  updateOverlayUIEnabled();
+  updateSpaceControlsVisibility();
+  if($('#syncOtherToggle').checked){ syncOtherFromInitial(); updateOtherControlsState(); }
+  applyCanvasSizingUI();
 
-  generateGrid(true);
-};
-window.addEventListener('resize',()=>{ if($('#screenSize').checked){ currentCells=null; generateGrid(true); }});
-document.addEventListener('keydown',(e)=>{ if(e.code==='Space'&&!e.target.matches('input,textarea')){e.preventDefault(); regenerate();} if(e.code==='Escape'){toggleSidebar();}});
+  // First render + set lastAutoRows baseline
+  lastAutoRows = parseInt($('#rowSlider').value,10)||15;
+  setupFirstRenderWatchers();
+});
 </script>
 </body>
 </html>
