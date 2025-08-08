@@ -34,7 +34,7 @@
   }
   body.sidebar-collapsed #canvasContainer{left:0}
 
-  /* New artboard wrapper so manual sizing is centered cleanly */
+  /* Artboard wrapper so manual sizing is centered cleanly */
   #artboard{display:block;width:100%;height:100%}
   #stage{display:block;width:100%;height:100%}
 
@@ -128,7 +128,7 @@
                 <label>Replace Space</label>
                 <input type="checkbox" id="replaceSpaceChar">
               </div>
-                <div class="row compact" id="replaceCharRow">
+              <div class="row compact" id="replaceCharRow">
                 <label>With Character</label>
                 <input type="text" id="replaceCharText" value="_" maxlength="1" style="width:40px">
               </div>
@@ -312,7 +312,8 @@ const $$ = sel => Array.from(document.querySelectorAll(sel));
 let runNonce = Math.random();
 let lastRunSeed = runNonce;
 let EXPORT_SIZE_OVERRIDE = null; // {w,h} while exporting
-let lastAutoRows = 15;          // remembers last auto-picked rows
+let lastAutoRows = 15;
+let lastGoodOutput = null;       // <- keeps last successful layout (cells+config) as ultra fallback
 
 function rand(){return Math.abs(Math.sin(runNonce+=0.1337))%1;}
 function shuffled(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
@@ -830,7 +831,7 @@ function packRows(charData,plan){
   return { placements, usedChars };
 }
 
-/* ---------- Exported sizing helpers ---------- */
+/* ---------- Exported sizing/helpers ---------- */
 function getCanvasSize(){
   if(EXPORT_SIZE_OVERRIDE){
     return {width:EXPORT_SIZE_OVERRIDE.w, height:EXPORT_SIZE_OVERRIDE.h};
@@ -842,7 +843,7 @@ function getCanvasSize(){
   return {width:parseInt($('#canvasWidth').value||'1200',10), height:parseInt($('#canvasHeight').value||'800',10)};
 }
 
-/* ---------- Auto-rows estimator ---------- */
+/* ---------- Auto-rows evaluator ---------- */
 function parseCharDataForText(text){
   const includeSpaces=$('#includeSpaces').checked;
   const charData=[]; let wordIndex=0, firstInWord=true;
@@ -860,7 +861,6 @@ function parseCharDataForText(text){
   }
   return charData;
 }
-
 function evaluateTessRows(rows, charData, innerW, innerH, size){
   let colsHint=null, success=false, tries=0, chosenCols=null;
   while(!success&&tries<120){
@@ -897,7 +897,6 @@ function evaluateTessRows(rows, charData, innerW, innerH, size){
 
   return {score,cols,cellW,cellH};
 }
-
 function evaluateBasicRows(rows, innerW, innerH, size){
   const out=layoutBasicBalanced(rows, innerW, innerH, size);
   if(!out.bestConfig) return {score:Infinity};
@@ -917,7 +916,6 @@ function evaluateBasicRows(rows, innerW, innerH, size){
 
   return {score,cols,cellW,cellH};
 }
-
 function pickBestRowsForCurrentText(){
   const rawText=($('#phraseInput').value || DEFAULT_QUOTE)
     .toUpperCase().replace(/[""]/g,'"').replace(/\u2014/g,'-').replace(/…/g,'...');
@@ -937,7 +935,7 @@ function pickBestRowsForCurrentText(){
       const e=evaluateTessRows(r,charData,innerW,innerH,size);
       if(e.score<best.score){ best={rows:r,score:e.score}; }
     }
-  }else{ // basic
+  }else{
     for(let r=RMIN;r<=RMAX;r++){
       const e=evaluateBasicRows(r,innerW,innerH,size);
       if(e.score<best.score){ best={rows:r,score:e.score}; }
@@ -945,8 +943,19 @@ function pickBestRowsForCurrentText(){
   }
   return best.rows;
 }
+function pickBestRowsBasicOnly(){
+  const size=getCanvasSize();
+  const margin=parseInt($('#marginSlider').value||'0',10);
+  const innerW=Math.max(1,size.width - margin*2), innerH=Math.max(1,size.height - margin*2);
+  let best={rows:parseInt($('#rowSlider').value,10)||15, score:Infinity};
+  for(let r=1;r<=50;r++){
+    const e=evaluateBasicRows(r,innerW,innerH,size);
+    if(e.score<best.score){ best={rows:r,score:e.score}; }
+  }
+  return best.rows;
+}
 
-/* ---------- Render pipeline ---------- */
+/* ---------- Render pipeline (with never-blank fallback) ---------- */
 function generateGrid(newRandom=false, startNonceOverride=null){
   try{
     if(newRandom) runNonce=Math.random();
@@ -957,7 +966,7 @@ function generateGrid(newRandom=false, startNonceOverride=null){
 
     const rawText=($('#phraseInput').value || DEFAULT_QUOTE)
       .toUpperCase().replace(/[""]/g,'"').replace(/\u2014/g,'-').replace(/…/g,'...');
-    if(!rawText.trim()) return;
+    const hasText = !!rawText.trim();
 
     const size=getCanvasSize();
     const margin = parseInt($('#marginSlider').value||'0',10);
@@ -967,16 +976,18 @@ function generateGrid(newRandom=false, startNonceOverride=null){
 
     const gridType=document.querySelector('input[name="gridType"]:checked')?.value||'tessellated';
     let currentOutput=null;
+    let usedFallbackBasic = false;
 
     if(gridType==='basic'){
       currentOutput=layoutBasicBalanced(parseInt($('#rowSlider').value,10), innerW, innerH, size);
-    }else{
+    }else if(hasText){
+      // Try tessellated first
       const text=rawText;
       const charData=parseCharDataForText(text);
-      if(!charData.length) return;
 
-      const rows=parseInt($('#rowSlider').value,10);
-      let colsHint=null, success=false, tries=0;
+      let rows=parseInt($('#rowSlider').value,10);
+      let colsHint=null, success=false, tries=0, startX=0,startY=0, cells=[], bestConfig=null;
+
       while(!success&&tries<120){
         const plan=planGrid(charData,rows,colsHint);
         const cols=plan.cols;
@@ -984,8 +995,8 @@ function generateGrid(newRandom=false, startNonceOverride=null){
         const cellH=Math.max(1,Math.floor(innerH/rows));
         const gridW=cols*cellW, gridH=rows*cellH;
 
-        const startX=margin+Math.floor((size.width - margin*2 - gridW)/2);
-        const startY=margin+Math.floor((size.height - margin*2 - gridH)/2);
+        startX=margin+Math.floor((size.width - margin*2 - gridW)/2);
+        startY=margin+Math.floor((size.height - margin*2 - gridH)/2);
 
         const {placements,usedChars}=packRows(charData,plan);
         const totalCells=rows*cols;
@@ -994,7 +1005,8 @@ function generateGrid(newRandom=false, startNonceOverride=null){
         const filledAll=(placedCells===totalCells);
 
         if(usedAll&&filledAll){
-          const cells=[]; let colIndexPerRow=Array(rows).fill(0);
+          let colIndexPerRow=Array(rows).fill(0);
+          cells=[];
           for(const p of placements){
             const r=p.row, c=colIndexPerRow[r];
             const x=startX+c*cellW, y=startY+r*cellH;
@@ -1014,17 +1026,32 @@ function generateGrid(newRandom=false, startNonceOverride=null){
               colIndexPerRow[r]+=1;
             }
           }
-          currentOutput={cells, bestConfig:{rows,cols,cellW,cellH,totalCells}};
+          bestConfig={rows,cols,cellW,cellH,totalCells};
+          currentOutput={cells, bestConfig};
           success=true;
         }else{
           colsHint=!filledAll ? Math.max(1,plan.cols-1) : plan.cols+1;
           tries++;
         }
       }
+
+      // Fallback to BASIC if tessellation didn't succeed this frame
+      if(!success){
+        usedFallbackBasic = true;
+        const fbRows = $('#autoRows').checked ? pickBestRowsBasicOnly() : rows;
+        currentOutput = layoutBasicBalanced(fbRows, innerW, innerH, size);
+      }
+    }
+
+    // If still no output, last-resort reuse last good
+    if((!currentOutput || !currentOutput.cells || !currentOutput.cells.length) && lastGoodOutput){
+      currentOutput = lastGoodOutput.output;
     }
 
     const bgColor=$('#bgColorPicker').value.trim();
-    if(!currentOutput || !currentOutput.cells.length){
+
+    if(!currentOutput || !currentOutput.cells || !currentOutput.cells.length){
+      // Nothing to draw (no text) -> draw background only
       const bgOnly=document.createElementNS('http://www.w3.org/2000/svg','rect');
       bgOnly.setAttribute('x','0'); bgOnly.setAttribute('y','0');
       bgOnly.setAttribute('width',String(size.width)); bgOnly.setAttribute('height',String(size.height));
@@ -1049,12 +1076,15 @@ function generateGrid(newRandom=false, startNonceOverride=null){
     const txtOpacity=(parseInt($('#textOpacitySlider').value||'100',10))/100;
     gText.setAttribute('opacity', String(txtOpacity));
 
-    // Draw bg tiles
+    // Draw
     for(const cell of currentOutput.cells) cell.drawBg(gBg);
-
-    // Draw text tiles: other first, initial last (higher z)
     for(const cell of currentOutput.cells){ if(!cell.isFirstChar) cell.drawText(gText); }
     for(const cell of currentOutput.cells){ if( cell.isFirstChar) cell.drawText(gText); }
+
+    // Remember last good (only if we actually drew tiles)
+    if(currentOutput.cells.length){
+      lastGoodOutput = { output: currentOutput };
+    }
 
     lastRunSeed = seedAtStart;
 
