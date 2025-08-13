@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bezier Tile Character Creator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="main-container">
+    <div class="toolbox">
+      <div class="section">
+        <h3>Tile Sequence</h3>
+        <div class="controls" style="justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button onclick="app.addTile()">Add Tile</button>
+            <button onclick="app.addFolder()">Add Folder</button>
+            <button onclick="app.clearTiles()">Clear All</button>
+            <span id="currentCharName" style="color:var(--accent); font-weight:600; margin-left:1rem;">No character selected</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button id="reorderBtn" title="Best tile sequence">Reorder</button>
+          </div>
+        </div>
+        <div class="tile-list" id="tileList"></div>
+      </div>
+
+      <div class="section">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+          <h3 style="margin:0; color:var(--accent); font-size:16px;">Tile Shapes</h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:12px; color:var(--muted);">Size</span>
+            <input type="range" id="tileSizeRange" min="0" max="1" step="0.01" value="0" style="width:120px; accent-color:var(--accent);">
+          </div>
+        </div>
+        <div class="button-grid" id="shapeGrid"></div>
+      </div>
+
+      <div class="section">
+        <h3>Tile Types</h3>
+        <div class="button-grid" id="typeGrid"></div>
+      </div>
+    </div>
+    
+    <div class="viewer-container">
+      <div class="viewer-wrap">
+        <div class="viewer">
+          <svg id="viewerSvg" viewBox="0 0 500 500"></svg>
+        </div>
+
+        <div class="overlay-control overlay-top">
+          <span id="labelTop" class="overlay-label">T:0</span>
+          <input type="range" id="topRange" min="-10" max="10" value="0">
+        </div>
+        <div class="overlay-control overlay-bottom">
+          <span id="labelBottom" class="overlay-label">B:0</span>
+          <input type="range" id="bottomRange" min="-10" max="10" value="0">
+        </div>
+        <div class="overlay-control overlay-left">
+          <div id="labelLeft" class="tip-label">L:0</div>
+          <div class="vwrap"><input type="range" id="leftRange" min="-10" max="10" value="0"></div>
+        </div>
+        <div class="overlay-control overlay-right">
+          <div id="labelRight" class="tip-label">R:0</div>
+          <div class="vwrap"><input type="range" id="rightRange" min="-10" max="10" value="0"></div>
+        </div>
+      </div>
+
+      <div class="viewer-toolbar">
+        <div class="seg" role="tablist" aria-label="Corner mode">
+          <button id="modeTile" class="active" type="button">Tile</button>
+          <button id="modeBevel" type="button">Beveled corner</button>
+        </div>
+        <div class="stroke-control">
+          <label for="strokeRange">Stroke</label>
+          <input type="range" id="strokeRange" min="0.5" max="8" step="0.5" value="2">
+          <span id="strokeVal" class="stroke-val">2</span>
+        </div>
+        <div class="scale-controls">
+          <div class="scale-group">
+            <label for="widthScaleRange">Width</label>
+            <input type="range" id="widthScaleRange" min="50" max="100" step="1" value="100">
+            <span id="widthScaleVal" class="scale-val">100%</span>
+          </div>
+          <div class="scale-group">
+            <label for="heightScaleRange">Height</label>
+            <input type="range" id="heightScaleRange" min="50" max="100" step="1" value="100">
+            <span id="heightScaleVal" class="scale-val">100%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls" style="gap:18px; flex-wrap:wrap;">
+        <label style="font-size:12px;color:var(--muted);">Chamfer
+          <input type="range" id="chamferRange" min="0" max="100" step="1" value="40" style="width:220px; accent-color:var(--accent);">
+        </label>
+        <label style="font-size:12px;color:var(--muted);">Bevel
+          <input type="range" id="bevelRange" min="0" max="1" step="0.01" value="0.6" style="width:220px; accent-color:var(--accent);">
+        </label>
+      </div>
+
+      <div class="preview-grid">
+        <div class="preview-card"><div class="preview-holder" style="width:100px; height:100px;"><div id="preview_100_100"></div></div></div>
+        <div class="preview-card"><div class="preview-holder" style="width:50px; height:100px;"><div id="preview_50_100"></div></div></div>
+        <div class="preview-card" style="flex:1"><div class="preview-holder" style="width:400px; height:100px;"><div id="preview_400_100"></div></div></div>
+      </div>
+
+      <div class="controls" style="justify-content:flex-start;">
+        <button id="copySvgBtn" class="copy-btn">Copy SVG Data</button>
+        <button id="copyMergedPathBtn" class="copy-btn" title="Exhaustive junction merge, auto-close loops">Copy Continuous Path</button>
+      </div>
+
+      <div class="section">
+        <h3>Character Definition</h3>
+        <div id="charResult" style="background:var(--bg); color:var(--fg); border:1px solid var(--btnb); border-radius:6px; padding:1rem; font-family:monospace; font-size:12px; word-break:break-all; user-select:text; cursor:text;">Loading...</div>
+      </div>
+    </div>
+
+    <div class="characters-panel">
+      <div class="section">
+        <h3>Characters</h3>
+        <div class="controls" style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button onclick="app.addCharacter()">Add Character</button>
+          <button onclick="app.importCharacters()" class="import-btn" title="Import characters from JSON file">Import</button>
+          <button onclick="app.exportCharacters()" class="export-btn" title="Export all characters to JSON file">Export</button>
+        </div>
+        <div class="character-list" id="characterList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="characterModal">
+    <div class="modal-content">
+      <h4 id="modalTitle">Add Character</h4>
+      <input type="text" id="characterNameInput" placeholder="Character name (e.g., A, B, etc.)" maxlength="50">
+      <div class="modal-buttons">
+        <button class="secondary" onclick="app.closeCharacterModal()">Cancel</button>
+        <button class="primary" onclick="app.saveCharacter()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for import (accepts multiple formats) -->
+  <input type="file" id="importFileInput" accept=".json,.txt,.js" style="display:none">
+
+  <div id="charCtx" class="ctx hidden">
+    <button id="charCopyPath">Copy Path</button>
+    <button id="charPastePath">Paste Path</button>
+  </div>
+  <div id="folderCtx" class="ctx hidden">
+    <button id="folderCopyPath">Copy Path</button>
+    <button id="folderPastePath">Paste Path</button>
+  </div>
+
+  <!-- Load modules in order -->
+  <script src="tileData.js"></script>
+  <script src="geometry.js"></script>
+  <script src="tileManager.js"></script>
+  <script src="pathBuilder.js"></script>
+  <script src="uiComponents.js"></script>
+  <script src="characterManager.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
